@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presentation Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 2rem;
+            background: #f0f0f0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #c75300;
+            margin-bottom: 2rem;
+        }
+        .section {
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background: #f8f8f8;
+            border-radius: 8px;
+        }
+        button {
+            background: #c75300;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-right: 1rem;
+            margin-bottom: 1rem;
+        }
+        button:hover {
+            background: #a04000;
+        }
+        .info {
+            background: #e8f5e9;
+            padding: 1rem;
+            border-radius: 6px;
+            margin-top: 1rem;
+        }
+        .room-id {
+            font-family: monospace;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #c75300;
+            background: #fff3e0;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            display: inline-block;
+        }
+        iframe {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Cloudflare Tech Talk - Test Dashboard</h1>
+        
+        <div class="section">
+            <h2>📊 Presenter Controls</h2>
+            <button onclick="openPresenter()">Open Presenter View</button>
+            <button onclick="getRoomId()">Get Room ID</button>
+            <button onclick="clearRoom()">Clear Room (New Presentation)</button>
+            <div id="presenterInfo" class="info" style="display:none;">
+                <p><strong>Room ID:</strong> <span id="roomId" class="room-id">------</span></p>
+                <p><strong>Audience URL:</strong> <span id="audienceUrl"></span></p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>👥 Audience Test</h2>
+            <button onclick="openAudience()">Join as Audience</button>
+            <button onclick="openMultipleAudience()">Open 3 Audience Windows</button>
+            <div id="audienceFrame" style="display:none;">
+                <iframe id="audienceIframe"></iframe>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📝 Instructions</h2>
+            <ol>
+                <li>Click "Open Presenter View" to start presenting</li>
+                <li>Click "Get Room ID" to see your unique 6-digit room code</li>
+                <li>Share the room ID or QR code with your audience</li>
+                <li>Use keyboard shortcuts in presenter view:
+                    <ul>
+                        <li><strong>Arrow keys</strong> - Navigate slides</li>
+                        <li><strong>P</strong> - Start a poll</li>
+                        <li><strong>F</strong> - Jump to final bio slide</li>
+                    </ul>
+                </li>
+                <li>Audience members will stay synchronized even if they disconnect</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        const baseUrl = 'http://localhost:8787';
+        
+        function openPresenter() {
+            window.open(baseUrl + '/slides', 'presenter', 'width=1400,height=900');
+            setTimeout(getRoomId, 1000);
+        }
+        
+        function getRoomId() {
+            // Get room ID from localStorage
+            const roomId = localStorage.getItem('presentationRoomId');
+            if (roomId) {
+                document.getElementById('roomId').textContent = roomId;
+                document.getElementById('audienceUrl').textContent = baseUrl + '/audience/' + roomId;
+                document.getElementById('presenterInfo').style.display = 'block';
+            } else {
+                alert('No room ID found. Please open the presenter view first.');
+            }
+        }
+        
+        function clearRoom() {
+            if (confirm('This will create a new presentation room. Are you sure?')) {
+                localStorage.removeItem('presentationRoomId');
+                alert('Room cleared. Open presenter view to generate a new room ID.');
+                document.getElementById('presenterInfo').style.display = 'none';
+            }
+        }
+        
+        function openAudience() {
+            const roomId = localStorage.getItem('presentationRoomId');
+            if (roomId) {
+                const url = baseUrl + '/audience/' + roomId;
+                document.getElementById('audienceIframe').src = url;
+                document.getElementById('audienceFrame').style.display = 'block';
+            } else {
+                alert('No room ID found. Please open the presenter view first.');
+            }
+        }
+        
+        function openMultipleAudience() {
+            const roomId = localStorage.getItem('presentationRoomId');
+            if (roomId) {
+                const url = baseUrl + '/audience/' + roomId;
+                for (let i = 0; i < 3; i++) {
+                    setTimeout(() => {
+                        window.open(url, 'audience' + i, 'width=400,height=700');
+                    }, i * 500);
+                }
+            } else {
+                alert('No room ID found. Please open the presenter view first.');
+            }
+        }
+        
+        // Auto-load room ID if it exists
+        window.onload = () => {
+            const roomId = localStorage.getItem('presentationRoomId');
+            if (roomId) {
+                getRoomId();
+            }
+        };
+    </script>
+</body>
+</html>

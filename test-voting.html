@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voting System Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .panel {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #5a67d8;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .status {
+            padding: 8px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        iframe {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Voting System Test</h1>
+    
+    <div class="container">
+        <div class="panel">
+            <h2>Presenter View</h2>
+            <div id="presenterStatus" class="status disconnected">Connecting...</div>
+            <iframe src="http://localhost:8787/slides" id="presenterFrame"></iframe>
+            <div class="log" id="presenterLog"></div>
+        </div>
+        
+        <div class="panel">
+            <h2>Audience View</h2>
+            <div id="audienceStatus" class="status disconnected">Connecting...</div>
+            <iframe src="http://localhost:8787/audience" id="audienceFrame"></iframe>
+            <div class="log" id="audienceLog"></div>
+        </div>
+    </div>
+    
+    <div style="margin-top: 20px; background: white; padding: 20px; border-radius: 8px;">
+        <h2>Test Controls</h2>
+        <button onclick="startPoll()">Start Test Poll</button>
+        <button onclick="simulateVotes()">Simulate 10 Votes</button>
+        <button onclick="voteFromAudience('option1')">Vote Option 1</button>
+        <button onclick="voteFromAudience('option2')">Vote Option 2</button>
+        <button onclick="voteFromAudience('option3')">Vote Option 3</button>
+        <button onclick="clearLogs()">Clear Logs</button>
+        
+        <div class="log" id="mainLog" style="height: 300px; margin-top: 20px;"></div>
+    </div>
+    
+    <script>
+        let presenterWs = null;
+        let audienceWs = null;
+        let currentPollId = null;
+        
+        function log(message, target = 'mainLog') {
+            const logEl = document.getElementById(target);
+            const timestamp = new Date().toLocaleTimeString();
+            logEl.innerHTML += `[${timestamp}] ${message}<br>`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+        
+        function connectPresenter() {
+            presenterWs = new WebSocket('ws://localhost:8787/ws/slides');
+            
+            presenterWs.onopen = () => {
+                document.getElementById('presenterStatus').className = 'status connected';
+                document.getElementById('presenterStatus').textContent = '✅ Presenter Connected';
+                log('Presenter WebSocket connected', 'presenterLog');
+            };
+            
+            presenterWs.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                log(`Presenter received: ${data.type}`, 'presenterLog');
+                
+                if (data.type === 'pollStart') {
+                    currentPollId = data.data.pollId;
+                    log(`📊 Poll started: ${data.data.question}`, 'presenterLog');
+                    log(`Poll ID: ${currentPollId}`, 'presenterLog');
+                } else if (data.type === 'pollUpdate') {
+                    log(`📈 Vote update: ${JSON.stringify(data.data.votes)}`, 'presenterLog');
+                } else if (data.type === 'pollEnd') {
+                    log(`🏆 Poll ended. Winner: ${data.data.winner}`, 'presenterLog');
+                }
+            };
+            
+            presenterWs.onerror = (error) => {
+                log(`Presenter WebSocket error: ${error}`, 'presenterLog');
+            };
+            
+            presenterWs.onclose = () => {
+                document.getElementById('presenterStatus').className = 'status disconnected';
+                document.getElementById('presenterStatus').textContent = '❌ Presenter Disconnected';
+                log('Presenter WebSocket closed', 'presenterLog');
+            };
+        }
+        
+        function connectAudience() {
+            audienceWs = new WebSocket('ws://localhost:8787/ws/slides');
+            
+            audienceWs.onopen = () => {
+                document.getElementById('audienceStatus').className = 'status connected';
+                document.getElementById('audienceStatus').textContent = '✅ Audience Connected';
+                log('Audience WebSocket connected', 'audienceLog');
+            };
+            
+            audienceWs.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                log(`Audience received: ${data.type}`, 'audienceLog');
+                
+                if (data.type === 'pollStart') {
+                    currentPollId = data.data.pollId;
+                    log(`📊 Poll received: ${data.data.question}`, 'audienceLog');
+                }
+            };
+            
+            audienceWs.onerror = (error) => {
+                log(`Audience WebSocket error: ${error}`, 'audienceLog');
+            };
+            
+            audienceWs.onclose = () => {
+                document.getElementById('audienceStatus').className = 'status disconnected';
+                document.getElementById('audienceStatus').textContent = '❌ Audience Disconnected';
+                log('Audience WebSocket closed', 'audienceLog');
+            };
+        }
+        
+        async function startPoll() {
+            log('🚀 Starting test poll...');
+            
+            if (presenterWs && presenterWs.readyState === WebSocket.OPEN) {
+                const pollData = {
+                    type: 'startPoll',
+                    data: {
+                        pollId: 'test-poll-' + Date.now(),
+                        question: 'Which Cloudflare product should we explore?',
+                        options: [
+                            { id: 'option1', label: 'Workers KV' },
+                            { id: 'option2', label: 'Durable Objects' },
+                            { id: 'option3', label: 'R2 Storage' }
+                        ],
+                        duration: 30
+                    }
+                };
+                
+                presenterWs.send(JSON.stringify(pollData));
+                currentPollId = pollData.data.pollId;
+                log(`Sent poll start command. Poll ID: ${currentPollId}`);
+            } else {
+                log('❌ Presenter WebSocket not connected!');
+            }
+        }
+        
+        async function voteFromAudience(optionId) {
+            if (!currentPollId) {
+                log('❌ No active poll to vote on!');
+                return;
+            }
+            
+            const userId = 'test-user-' + Math.random().toString(36).substr(2, 9);
+            log(`🗳️ Voting for ${optionId} as ${userId}...`);
+            
+            try {
+                const response = await fetch('http://localhost:8787/api/vote', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pollId: currentPollId,
+                        optionId: optionId,
+                        userId: userId
+                    })
+                });
+                
+                if (response.ok) {
+                    log(`✅ Vote submitted successfully for ${optionId}`);
+                } else {
+                    const error = await response.text();
+                    log(`❌ Vote failed: ${error}`);
+                }
+            } catch (error) {
+                log(`❌ Vote error: ${error.message}`);
+            }
+        }
+        
+        async function simulateVotes() {
+            log('🤖 Simulating 10 random votes...');
+            const options = ['option1', 'option2', 'option3'];
+            
+            for (let i = 0; i < 10; i++) {
+                const optionId = options[Math.floor(Math.random() * options.length)];
+                await voteFromAudience(optionId);
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+            
+            log('✅ Simulation complete!');
+        }
+        
+        function clearLogs() {
+            document.getElementById('mainLog').innerHTML = '';
+            document.getElementById('presenterLog').innerHTML = '';
+            document.getElementById('audienceLog').innerHTML = '';
+            log('Logs cleared');
+        }
+        
+        // Connect WebSockets on load
+        setTimeout(() => {
+            connectPresenter();
+            connectAudience();
+        }, 1000);
+        
+        log('🧪 Test environment ready. Use the controls above to test voting.');
+        log('Note: The server should be running on http://localhost:8787');
+    </script>
+</body>
+</html>

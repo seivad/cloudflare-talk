@@ -1,0 +1,168 @@
+{
+  "nodes": {
+    "start": {
+      "slideIndex": 0,
+      "poll": {
+        "question": "Where should we explore first in the Cloudflare universe?",
+        "options": [
+          { "id": "edge-compute", "label": "Edge Computing Magic ⚡", "emoji": "⚡" },
+          { "id": "data-layer", "label": "Data & Storage 💾", "emoji": "💾" },
+          { "id": "ai-adventure", "label": "AI at the Edge 🤖", "emoji": "🤖" }
+        ],
+        "routes": {
+          "edge-compute": "workers-intro",
+          "data-layer": "d1-intro",
+          "ai-adventure": "ai-intro"
+        }
+      }
+    },
+    "workers-intro": {
+      "slideIndex": 1,
+      "poll": {
+        "question": "Workers are like baristas everywhere. What feature excites you most?",
+        "options": [
+          { "id": "durable", "label": "Durable Objects (Stateful Magic) 🎯", "emoji": "🎯" },
+          { "id": "queues", "label": "Queues (The Bouncer) 🚦", "emoji": "🚦" },
+          { "id": "containers", "label": "Containers (Heavy Lifting) 📦", "emoji": "📦" }
+        ],
+        "routes": {
+          "durable": "durable-objects",
+          "queues": "queues-deep",
+          "containers": "containers-demo"
+        }
+      }
+    },
+    "durable-objects": {
+      "slideIndex": 2,
+      "poll": {
+        "question": "Durable Objects = one friend with perfect memory. Use case?",
+        "options": [
+          { "id": "chat", "label": "Real-time Chat Rooms 💬", "emoji": "💬" },
+          { "id": "game", "label": "Multiplayer Games 🎮", "emoji": "🎮" },
+          { "id": "collab", "label": "Collaborative Editing 📝", "emoji": "📝" }
+        ],
+        "routes": {
+          "chat": "do-chat-example",
+          "game": "do-game-example",
+          "collab": "do-collab-example"
+        }
+      }
+    },
+    "d1-intro": {
+      "slideIndex": 6,
+      "poll": {
+        "question": "D1 = SQLite everywhere. What's your data challenge?",
+        "options": [
+          { "id": "migration", "label": "Migrating from Postgres 🔄", "emoji": "🔄" },
+          { "id": "geo", "label": "Geo-distributed Data 🌍", "emoji": "🌍" },
+          { "id": "r2-combo", "label": "Combine with R2 Storage 🗄️", "emoji": "🗄️" }
+        ],
+        "routes": {
+          "migration": "d1-migration",
+          "geo": "d1-geo",
+          "r2-combo": "r2-intro"
+        }
+      }
+    },
+    "r2-intro": {
+      "slideIndex": 8,
+      "poll": {
+        "question": "R2 = Your attic with zero egress fees. What will you store?",
+        "options": [
+          { "id": "media", "label": "Images & Videos 📸", "emoji": "📸" },
+          { "id": "backups", "label": "Backups & Archives 💾", "emoji": "💾" },
+          { "id": "datasets", "label": "ML Datasets 🧠", "emoji": "🧠" }
+        ],
+        "routes": {
+          "media": "r2-media",
+          "backups": "r2-backups",
+          "datasets": "ai-intro"
+        }
+      }
+    },
+    "ai-intro": {
+      "slideIndex": 10,
+      "poll": {
+        "question": "AI at the Edge = Smart neighbor next door. Your AI need?",
+        "options": [
+          { "id": "moderate", "label": "Content Moderation 🛡️", "emoji": "🛡️" },
+          { "id": "personalize", "label": "Personalization 🎯", "emoji": "🎯" },
+          { "id": "analyze", "label": "Sentiment Analysis 📊", "emoji": "📊" }
+        ],
+        "routes": {
+          "moderate": "ai-moderation",
+          "personalize": "ai-personalization",
+          "analyze": "ai-sentiment"
+        }
+      }
+    },
+    "queues-deep": {
+      "slideIndex": 12,
+      "poll": {
+        "question": "Queues = The bouncer at your club. What problem to solve?",
+        "options": [
+          { "id": "burst", "label": "Handle Traffic Spikes 📈", "emoji": "📈" },
+          { "id": "batch", "label": "Batch Processing 📦", "emoji": "📦" },
+          { "id": "retry", "label": "Retry Logic & DLQ 🔄", "emoji": "🔄" }
+        ],
+        "routes": {
+          "burst": "queues-burst",
+          "batch": "queues-batch",
+          "retry": "queues-retry"
+        }
+      }
+    },
+    "containers-demo": {
+      "slideIndex": 15,
+      "poll": {
+        "question": "Containers = Food truck for special tools. Ready to see it in action?",
+        "options": [
+          { "id": "demo-yes", "label": "Yes! Show me the demo 🚀", "emoji": "🚀" },
+          { "id": "workflow", "label": "How about Workflows first? 🔄", "emoji": "🔄" },
+          { "id": "recap", "label": "Let's recap everything 📚", "emoji": "📚" }
+        ],
+        "routes": {
+          "demo-yes": "container-live-demo",
+          "workflow": "workflows-intro",
+          "recap": "recap-slide"
+        }
+      }
+    },
+    "workflows-intro": {
+      "slideIndex": 18,
+      "poll": {
+        "question": "Workflows = Wedding planner for your services. Use case?",
+        "options": [
+          { "id": "email", "label": "Email Sequences 📧", "emoji": "📧" },
+          { "id": "etl", "label": "ETL Pipelines 🔄", "emoji": "🔄" },
+          { "id": "orchestrate", "label": "Service Orchestration 🎭", "emoji": "🎭" }
+        ],
+        "routes": {
+          "email": "workflow-email",
+          "etl": "workflow-etl",
+          "orchestrate": "workflow-orchestration"
+        }
+      }
+    },
+    "do-chat-example": { "slideIndex": 3 },
+    "do-game-example": { "slideIndex": 4 },
+    "do-collab-example": { "slideIndex": 5 },
+    "d1-migration": { "slideIndex": 7 },
+    "d1-geo": { "slideIndex": 7 },
+    "r2-media": { "slideIndex": 9 },
+    "r2-backups": { "slideIndex": 9 },
+    "ai-moderation": { "slideIndex": 11 },
+    "ai-personalization": { "slideIndex": 11 },
+    "ai-sentiment": { "slideIndex": 11 },
+    "queues-burst": { "slideIndex": 13 },
+    "queues-batch": { "slideIndex": 13 },
+    "queues-retry": { "slideIndex": 14 },
+    "container-live-demo": { "slideIndex": 16 },
+    "workflow-email": { "slideIndex": 19 },
+    "workflow-etl": { "slideIndex": 19 },
+    "workflow-orchestration": { "slideIndex": 19 },
+    "recap-slide": { "slideIndex": 20 }
+  },
+  "defaultDuration": 30000,
+  "startNode": "start"
+}

@@ -1,0 +1,56 @@
+name = "cloudflare-tech-talk"
+main = "src/index.ts"
+compatibility_date = "2025-01-11"
+compatibility_flags = ["nodejs_compat"]
+
+# Static assets
+assets = { directory = "public" }
+
+# Durable Objects
+[[durable_objects.bindings]]
+name = "SLIDE_ROOM"
+class_name = "SlideRoom"
+
+[[durable_objects.bindings]]
+name = "POLL_ROOM"
+class_name = "PollRoom"
+
+[[durable_objects.bindings]]
+name = "CONTAINER_STATUS"
+class_name = "ContainerStatus"
+
+# Durable Object migrations
+[[migrations]]
+tag = "v1"
+new_classes = ["SlideRoom", "PollRoom", "ContainerStatus"]
+
+# Queue Producer
+[[queues.producers]]
+binding = "VOTE_QUEUE"
+queue = "vote-queue"
+
+# Queue Consumer
+[[queues.consumers]]
+queue = "vote-queue"
+max_batch_size = 100
+max_batch_timeout = 5
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "tech-talk-db"
+database_id = "tech-talk-db-id"
+
+# R2 Storage
+[[r2_buckets]]
+binding = "ASSETS_BUCKET"
+bucket_name = "tech-talk-assets"
+
+# Environment Variables
+[vars]
+AUDIENCE_URL = "http://localhost:8787/audience"
+ADMIN_KEY = "tech-talk-2025"
+
+# Local development
+[env.development]
+vars = { ENVIRONMENT = "development" }
