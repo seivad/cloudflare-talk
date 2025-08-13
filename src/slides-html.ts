@@ -98,7 +98,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         .slide-gif-container {
             width: min(100%, 400px);
             aspect-ratio: 1;
-            border-radius: 50%;
+            border-radius: 6%;
             overflow: hidden;
             position: relative;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
@@ -228,7 +228,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         .poll-gif-container {
             width: min(100%, 400px);
             aspect-ratio: 1;
-            border-radius: 50%;
+            border-radius: 6%;
             overflow: hidden;
             position: relative;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
