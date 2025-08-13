@@ -220,7 +220,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         .poll-gif-wrapper {
             flex: 0 0 30%;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: center;
             padding: 0 2rem;
         }
