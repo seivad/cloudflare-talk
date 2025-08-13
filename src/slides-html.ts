@@ -8,6 +8,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        
         body {
             font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
             background: #1a1a1a;
@@ -103,6 +104,15 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             position: relative;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             background: #f0f0f0;
+        }
+        
+        .bio-heading {
+            color: #c75300 !important;
+            margin: 0 !important;
+            font-size: 2rem !important;
+            text-align: center !important;
+            line-height: 1.2 !important;
+            font-weight: 700 !important;
         }
         
         .slide-gif {
@@ -519,10 +529,10 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                 if (slide.isBioSlide) {
                     // Create custom bio slide content
                     slideDiv.innerHTML = 
-                        '<div style="display: flex; align-items: center; justify-content: center; gap: 4rem; height: 100%;">' +
+                        '<div style="display: flex; align-items: center; justify-content: center; gap: 10rem; height: 100%;">' +
                             '<div style="text-align: center;">' +
                                 '<img src="/photo.jpg" alt="Mick Davies" style="width: 200px; height: 200px; border-radius: 50%; object-fit: cover; border: 4px solid #c75300; box-shadow: 0 8px 32px rgba(199, 83, 0, 0.3); margin-bottom: 2rem;">' +
-                                '<h1 style="color: #c75300; margin-bottom: 0.5rem; font-size: 3.5rem;">Thanks for Joining! 🙏</h1>' +
+                                '<h1 class="bio-heading">Thanks for Joining! 🙏</h1>' +
                                 '<h2 style="color: #333; margin-bottom: 2rem; font-size: 2.5rem;">Mick Davies</h2>' +
                                 '<p style="font-size: 1.6rem; color: #555; margin-bottom: 1rem;">📧 <a href="mailto:mick@5150studios.com.au" style="color: #c75300; text-decoration: none;">mick@5150studios.com.au</a></p>' +
                             '</div>' +
@@ -552,7 +562,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                         p.textContent = text;
                         if (index === 0) {
                             p.style.fontSize = '2rem';
-                            p.style.color = '#0078d4';
+                            p.style.color = '#333';
                         }
                         slideDiv.appendChild(p);
                     });
@@ -802,12 +812,11 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             if (slideData.isBioSlide) {
                 // Create custom bio slide content
                 slideDiv.innerHTML = 
-                    '<div style="display: flex; align-items: center; justify-content: center; gap: 4rem; height: 100%;">' +
+                    '<div style="display: flex; align-items: center; justify-content: center; gap: 10rem; height: 100%;">' +
                         '<div style="text-align: center;">' +
                             '<img src="/photo.jpg" alt="Mick Davies" style="width: 200px; height: 200px; border-radius: 50%; object-fit: cover; border: 4px solid #c75300; box-shadow: 0 8px 32px rgba(199, 83, 0, 0.3); margin-bottom: 2rem;">' +
-                            '<h1 style="color: #c75300; margin-bottom: 0.5rem; font-size: 3.5rem;">Thanks for Joining! 🙏</h1>' +
+                            '<h1 class="bio-heading">Thanks for Joining! 🙏</h1>' +
                             '<h2 style="color: #333; margin-bottom: 2rem; font-size: 2.5rem;">Mick Davies</h2>' +
-                            '<p style="font-size: 1.6rem; color: #555; margin-bottom: 1rem;"><i class="fas fa-envelope" style="color: #c75300; margin-right: 0.5rem;"></i><a href="mailto:mick@5150studios.com.au" style="color: #c75300; text-decoration: none;">mick@5150studios.com.au</a></p>' +
                         '</div>' +
                         '<div style="text-align: left;">' +
                             '<h3 style="color: #c75300; font-size: 2.2rem; margin-bottom: 1.5rem;">Connect with me</h3>' +
@@ -815,6 +824,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                                 '<div style="display: flex; align-items: center; gap: 1rem;"><i class="fab fa-x-twitter" style="font-size: 1.6rem; width: 2rem; color: #333;"></i><a href="https://x.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
                                 '<div style="display: flex; align-items: center; gap: 1rem;"><i class="fab fa-instagram" style="font-size: 1.6rem; width: 2rem; color: #E4405F;"></i><a href="https://instagram.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
                                 '<div style="display: flex; align-items: center; gap: 1rem;"><i class="fab fa-linkedin" style="font-size: 1.6rem; width: 2rem; color: #0077B5;"></i><a href="https://linkedin.com/in/mickdaviesaus" target="_blank" style="color: #333; text-decoration: none;">mickdaviesaus</a></div>' +
+                                '<div style="display: flex; align-items: center; gap: 1rem;"><i class="fas fa-envelope" style="font-size: 1.6rem; width: 2rem; color: #c75300;"></i><a href="mailto:mick@5150studios.com.au" style="color: #333; text-decoration: none;">mick@5150studios.com.au</a></div>' +
                             '</div>' +
                             '<div style="margin-top: 2.5rem; padding-top: 1.5rem; border-top: 2px solid #e0e0e0;">' +
                                 '<h4 style="color: #c75300; font-size: 1.6rem; margin-bottom: 1rem;"><i class="fab fa-github" style="margin-right: 0.5rem;"></i>Get the Code</h4>' +
@@ -847,7 +857,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                             p.textContent = text;
                             if (currentSlideIndex === 0) {
                                 p.style.fontSize = '2rem';
-                                p.style.color = '#0078d4';
+                                p.style.color = '#333';
                             }
                             contentWrapper.appendChild(p);
                         });
@@ -897,7 +907,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                             p.textContent = text;
                             if (currentSlideIndex === 0) {
                                 p.style.fontSize = '2rem';
-                                p.style.color = '#0078d4';
+                                p.style.color = '#333';
                             }
                             slideDiv.appendChild(p);
                         });

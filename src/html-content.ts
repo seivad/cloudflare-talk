@@ -111,6 +111,30 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
     <style>
         /* Base styles for audience view */
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        /* Remove bullet points from lists */
+        ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        /* Style for slide text content */
+        .slide-text-content {
+            font-size: 1.4rem;
+            margin-bottom: 1rem;
+            font-weight: bold;
+            line-height: 1.4;
+        }
+        
+        /* Style for bio heading */
+        .bio-heading {
+            color: #c75300;
+            margin: 0;
+            font-size: 2rem;
+            text-align: center;
+            line-height: 1.2;
+        }
+        
         body { 
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -119,7 +143,12 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
             overflow: hidden;
         }
         .app-container { height: 100vh; display: flex; flex-direction: column; }
-        .main-view { flex: 1; padding: 1rem; overflow-y: auto; }
+        .main-view { 
+            flex: 1; 
+            padding: 1rem; 
+            padding-bottom: calc(1rem + 60px); /* Add extra padding for footer */
+            overflow-y: auto; 
+        }
         .slide-mirror { 
             background: rgba(255, 255, 255, 0.95);
             border-radius: 16px;
@@ -138,7 +167,7 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
             font-size: 1.1rem; 
             line-height: 1.8; 
             color: #444; 
-            padding: 1.5rem;
+            padding: 0;
         }
         .app-footer {
             position: fixed;
@@ -458,16 +487,16 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                                 document.getElementById('currentTitle').style.display = 'none';
                                 
                                 bodyHTML = '<div style="display: flex; flex-direction: column; align-items: center; gap: 2rem; text-align: center;">' +
-                                    '<h1 style="color: #c75300; margin: 0; font-size: 2.5rem; text-align: center;">Thanks for Joining! 🙏</h1>' +
+                                    '<h1 class="bio-heading">Thanks for Joining! 🙏</h1>' +
                                     '<img src="/photo.jpg" alt="Mick Davies" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid #c75300; box-shadow: 0 4px 20px rgba(199, 83, 0, 0.3);">' +
                                     '<h2 style="color: #333; margin: 0; font-size: 1.8rem;">Mick Davies</h2>' +
-                                    '<p style="font-size: 1.1rem; color: #555; margin: 0.5rem 0;"><i class="fas fa-envelope" style="color: #c75300; margin-right: 0.5rem;"></i><a href="mailto:mick@5150studios.com.au" style="color: #c75300; text-decoration: none;">mick@5150studios.com.au</a></p>' +
                                     '<div style="margin-top: 1.5rem;">' +
                                     '<h3 style="color: #c75300; font-size: 1.4rem; margin-bottom: 1rem;">Connect with me</h3>' +
                                     '<div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 1rem; text-align: left;">' +
                                     '<div><i class="fab fa-x-twitter" style="width: 1.5rem; color: #333;"></i><a href="https://x.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
                                     '<div><i class="fab fa-instagram" style="width: 1.5rem; color: #E4405F;"></i><a href="https://instagram.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
                                     '<div><i class="fab fa-linkedin" style="width: 1.5rem; color: #0077B5;"></i><a href="https://linkedin.com/in/mickdaviesaus" target="_blank" style="color: #333; text-decoration: none;">mickdaviesaus</a></div>' +
+                                    '<div><i class="fas fa-envelope" style="width: 1.5rem; color: #c75300;"></i><a href="mailto:mick@5150studios.com.au" style="color: #333; text-decoration: none;">mick@5150studios.com.au</a></div>' +
                                     '</div></div>' +
                                     '<div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #ddd;">' +
                                     '<h4 style="color: #c75300; font-size: 1.2rem; margin-bottom: 0.5rem;"><i class="fab fa-github" style="margin-right: 0.5rem;"></i>Get the Code</h4>' +
@@ -481,7 +510,7 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                                 // Add content paragraphs
                                 if (data.data.currentSlide.content && data.data.currentSlide.content.length > 0) {
                                     data.data.currentSlide.content.forEach(text => {
-                                        bodyHTML += '<p style="font-size: 1.2rem; margin-bottom: 1rem;">' + text + '</p>';
+                                        bodyHTML += '<p class="slide-text-content">' + text + '</p>';
                                     });
                                 }
                                 
@@ -533,16 +562,16 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                                 document.getElementById('currentTitle').style.display = 'none';
                                 
                                 bodyHTML = '<div style="display: flex; flex-direction: column; align-items: center; gap: 2rem; text-align: center;">' +
-                                    '<h1 style="color: #c75300; margin: 0; font-size: 2.5rem; text-align: center;">Thanks for Joining! 🙏</h1>' +
+                                    '<h1 class="bio-heading">Thanks for Joining! 🙏</h1>' +
                                     '<img src="/photo.jpg" alt="Mick Davies" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid #c75300; box-shadow: 0 4px 20px rgba(199, 83, 0, 0.3);">' +
                                     '<h2 style="color: #333; margin: 0; font-size: 1.8rem;">Mick Davies</h2>' +
-                                    '<p style="font-size: 1.1rem; color: #555; margin: 0.5rem 0;"><i class="fas fa-envelope" style="color: #c75300; margin-right: 0.5rem;"></i><a href="mailto:mick@5150studios.com.au" style="color: #c75300; text-decoration: none;">mick@5150studios.com.au</a></p>' +
                                     '<div style="margin-top: 1.5rem;">' +
                                     '<h3 style="color: #c75300; font-size: 1.4rem; margin-bottom: 1rem;">Connect with me</h3>' +
                                     '<div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 1rem; text-align: left;">' +
                                     '<div><i class="fab fa-x-twitter" style="width: 1.5rem; color: #333;"></i><a href="https://x.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
                                     '<div><i class="fab fa-instagram" style="width: 1.5rem; color: #E4405F;"></i><a href="https://instagram.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
                                     '<div><i class="fab fa-linkedin" style="width: 1.5rem; color: #0077B5;"></i><a href="https://linkedin.com/in/mickdaviesaus" target="_blank" style="color: #333; text-decoration: none;">mickdaviesaus</a></div>' +
+                                    '<div><i class="fas fa-envelope" style="width: 1.5rem; color: #c75300;"></i><a href="mailto:mick@5150studios.com.au" style="color: #333; text-decoration: none;">mick@5150studios.com.au</a></div>' +
                                     '</div></div>' +
                                     '<div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #ddd;">' +
                                     '<h4 style="color: #c75300; font-size: 1.2rem; margin-bottom: 0.5rem;"><i class="fab fa-github" style="margin-right: 0.5rem;"></i>Get the Code</h4>' +
@@ -556,7 +585,7 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                                 // Add content paragraphs
                                 if (data.data.content && data.data.content.length > 0) {
                                     data.data.content.forEach(text => {
-                                        bodyHTML += '<p style="font-size: 1.2rem; margin-bottom: 1rem;">' + text + '</p>';
+                                        bodyHTML += '<p class="slide-text-content">' + text + '</p>';
                                     });
                                 }
                                 
