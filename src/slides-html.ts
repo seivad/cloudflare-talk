@@ -537,14 +537,14 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                                 '<p style="font-size: 1.6rem; color: #555; margin-bottom: 1rem;">📧 <a href="mailto:mick@5150studios.com.au" style="color: #c75300; text-decoration: none;">mick@5150studios.com.au</a></p>' +
                             '</div>' +
                             '<div style="text-align: left;">' +
-                                '<h3 style="color: #c75300; font-size: 2.2rem; margin-bottom: 1.5rem;">Connect with me</h3>' +
+                                '<h3 style="color: #c75300; font-size: 2.2rem; margin-bottom: 1.5rem; text-align: left;">Connect with me</h3>' +
                                 '<div style="display: flex; flex-direction: column; gap: 1rem; font-size: 1.4rem;">' +
                                     '<div style="display: flex; align-items: center; gap: 1rem;"><span style="font-size: 1.8rem;">𝕏</span><a href="https://x.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
                                     '<div style="display: flex; align-items: center; gap: 1rem;"><span style="font-size: 1.8rem;">📷</span><a href="https://instagram.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
                                     '<div style="display: flex; align-items: center; gap: 1rem;"><span style="font-size: 1.8rem;">💼</span><a href="https://linkedin.com/in/mickdaviesaus" target="_blank" style="color: #333; text-decoration: none;">mickdaviesaus</a></div>' +
                                 '</div>' +
                                 '<div style="margin-top: 2.5rem; padding-top: 1.5rem; border-top: 2px solid #e0e0e0;">' +
-                                    '<h4 style="color: #c75300; font-size: 1.6rem; margin-bottom: 1rem;">📦 Get the Code</h4>' +
+                                    '<h4 style="color: #c75300; font-size: 1.6rem; margin-bottom: 1rem; text-align: left;">📦 Get the Code</h4>' +
                                     '<p style="font-size: 1.2rem; color: #555;"><a href="https://github.com/seivad/cloudflare-talk" target="_blank" style="color: #c75300; text-decoration: none; font-weight: 600;">github.com/seivad/cloudflare-talk</a></p>' +
                                 '</div>' +
                             '</div>' +
@@ -819,7 +819,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                             '<h2 style="color: #333; margin-bottom: 2rem; font-size: 2.5rem;">Mick Davies</h2>' +
                         '</div>' +
                         '<div style="text-align: left;">' +
-                            '<h3 style="color: #c75300; font-size: 2.2rem; margin-bottom: 1.5rem;">Connect with me</h3>' +
+                            '<h3 style="color: #c75300; font-size: 2.2rem; margin-bottom: 1.5rem; text-align: left;">Connect with me</h3>' +
                             '<div style="display: flex; flex-direction: column; gap: 1rem; font-size: 1.4rem;">' +
                                 '<div style="display: flex; align-items: center; gap: 1rem;"><i class="fab fa-x-twitter" style="font-size: 1.6rem; width: 2rem; color: #333;"></i><a href="https://x.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
                                 '<div style="display: flex; align-items: center; gap: 1rem;"><i class="fab fa-instagram" style="font-size: 1.6rem; width: 2rem; color: #E4405F;"></i><a href="https://instagram.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
@@ -827,7 +827,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                                 '<div style="display: flex; align-items: center; gap: 1rem;"><i class="fas fa-envelope" style="font-size: 1.6rem; width: 2rem; color: #c75300;"></i><a href="mailto:mick@5150studios.com.au" style="color: #333; text-decoration: none;">mick@5150studios.com.au</a></div>' +
                             '</div>' +
                             '<div style="margin-top: 2.5rem; padding-top: 1.5rem; border-top: 2px solid #e0e0e0;">' +
-                                '<h4 style="color: #c75300; font-size: 1.6rem; margin-bottom: 1rem;"><i class="fab fa-github" style="margin-right: 0.5rem;"></i>Get the Code</h4>' +
+                                '<h4 style="color: #c75300; font-size: 1.6rem; margin-bottom: 1rem; text-align: left;"><i class="fab fa-github" style="margin-right: 0.5rem;"></i>Get the Code</h4>' +
                                 '<p style="font-size: 1.2rem; color: #555;"><a href="https://github.com/seivad/cloudflare-talk" target="_blank" style="color: #c75300; text-decoration: none; font-weight: 600;">github.com/seivad/cloudflare-talk</a></p>' +
                             '</div>' +
                         '</div>' +

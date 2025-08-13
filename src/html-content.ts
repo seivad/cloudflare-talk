@@ -491,7 +491,7 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                                     '<img src="/photo.jpg" alt="Mick Davies" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid #c75300; box-shadow: 0 4px 20px rgba(199, 83, 0, 0.3);">' +
                                     '<h2 style="color: #333; margin: 0; font-size: 1.8rem;">Mick Davies</h2>' +
                                     '<div style="margin-top: 1.5rem;">' +
-                                    '<h3 style="color: #c75300; font-size: 1.4rem; margin-bottom: 1rem;">Connect with me</h3>' +
+                                    '<h3 style="color: #c75300; font-size: 1.4rem; margin-bottom: 1rem; text-align: left;">Connect with me</h3>' +
                                     '<div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 1rem; text-align: left;">' +
                                     '<div><i class="fab fa-x-twitter" style="width: 1.5rem; color: #333;"></i><a href="https://x.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
                                     '<div><i class="fab fa-instagram" style="width: 1.5rem; color: #E4405F;"></i><a href="https://instagram.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
@@ -499,7 +499,7 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                                     '<div><i class="fas fa-envelope" style="width: 1.5rem; color: #c75300;"></i><a href="mailto:mick@5150studios.com.au" style="color: #333; text-decoration: none;">mick@5150studios.com.au</a></div>' +
                                     '</div></div>' +
                                     '<div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #ddd;">' +
-                                    '<h4 style="color: #c75300; font-size: 1.2rem; margin-bottom: 0.5rem;"><i class="fab fa-github" style="margin-right: 0.5rem;"></i>Get the Code</h4>' +
+                                    '<h4 style="color: #c75300; font-size: 1.2rem; margin-bottom: 0.5rem; text-align: left;"><i class="fab fa-github" style="margin-right: 0.5rem;"></i>Get the Code</h4>' +
                                     '<p style="font-size: 0.9rem; color: #555; margin: 0;"><a href="https://github.com/seivad/cloudflare-talk" target="_blank" style="color: #c75300; text-decoration: none; font-weight: 600;">github.com/seivad/cloudflare-talk</a></p>' +
                                     '</div></div>';
                             } else {
@@ -566,7 +566,7 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                                     '<img src="/photo.jpg" alt="Mick Davies" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid #c75300; box-shadow: 0 4px 20px rgba(199, 83, 0, 0.3);">' +
                                     '<h2 style="color: #333; margin: 0; font-size: 1.8rem;">Mick Davies</h2>' +
                                     '<div style="margin-top: 1.5rem;">' +
-                                    '<h3 style="color: #c75300; font-size: 1.4rem; margin-bottom: 1rem;">Connect with me</h3>' +
+                                    '<h3 style="color: #c75300; font-size: 1.4rem; margin-bottom: 1rem; text-align: left;">Connect with me</h3>' +
                                     '<div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 1rem; text-align: left;">' +
                                     '<div><i class="fab fa-x-twitter" style="width: 1.5rem; color: #333;"></i><a href="https://x.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
                                     '<div><i class="fab fa-instagram" style="width: 1.5rem; color: #E4405F;"></i><a href="https://instagram.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
@@ -574,7 +574,7 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                                     '<div><i class="fas fa-envelope" style="width: 1.5rem; color: #c75300;"></i><a href="mailto:mick@5150studios.com.au" style="color: #333; text-decoration: none;">mick@5150studios.com.au</a></div>' +
                                     '</div></div>' +
                                     '<div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #ddd;">' +
-                                    '<h4 style="color: #c75300; font-size: 1.2rem; margin-bottom: 0.5rem;"><i class="fab fa-github" style="margin-right: 0.5rem;"></i>Get the Code</h4>' +
+                                    '<h4 style="color: #c75300; font-size: 1.2rem; margin-bottom: 0.5rem; text-align: left;"><i class="fab fa-github" style="margin-right: 0.5rem;"></i>Get the Code</h4>' +
                                     '<p style="font-size: 0.9rem; color: #555; margin: 0;"><a href="https://github.com/seivad/cloudflare-talk" target="_blank" style="color: #c75300; text-decoration: none; font-weight: 600;">github.com/seivad/cloudflare-talk</a></p>' +
                                     '</div></div>';
                             } else {
