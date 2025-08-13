@@ -189,7 +189,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         }
 
         .slide p {
-            font-size: 1.4rem;
+            font-size: 2rem;
             line-height: 1.8;
             margin-bottom: 1.5rem;
             color: #444;
@@ -197,8 +197,8 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
 
         .slide ul {
             list-style: none;
-            font-size: 1.3rem;
-            line-height: 2;
+            font-size: 1.8rem;
+            line-height: 2.2;
             color: #555;
             padding-left: 0;
         }
