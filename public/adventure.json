@@ -163,6 +163,6 @@
     "workflow-orchestration": { "slideIndex": 19 },
     "recap-slide": { "slideIndex": 20 }
   },
-  "defaultDuration": 30000,
+  "defaultDuration": 20000,
   "startNode": "start"
 }

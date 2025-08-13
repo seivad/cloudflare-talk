@@ -107,6 +107,7 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Cloudflare Tech Talk - Live</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         /* Base styles for audience view */
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -291,7 +292,7 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
         <div id="pollView" class="poll-view">
             <div class="poll-header">
                 <h2 class="poll-question" id="pollQuestion">Loading poll...</h2>
-                <div class="poll-timer" id="pollTimer">30</div>
+                <div class="poll-timer" id="pollTimer">20</div>
             </div>
             <div class="poll-options" id="pollOptions">
                 <!-- Poll options will be inserted here -->
@@ -316,6 +317,12 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
         // Extract room ID from URL or placeholder
         const roomId = '{{ROOM_ID}}';
         console.log('Audience view loaded for room:', roomId);
+        
+        // Validate room ID and redirect if needed
+        if (roomId === '{{ROOM_ID}}' || !roomId) {
+            // No room ID provided, redirect to session entry page
+            window.location.href = '/audience';
+        }
         let currentPollId = null;
         let currentPollData = null;
         let hasVoted = false;
@@ -447,22 +454,29 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                             
                             // Check if this is the bio slide
                             if (data.data.currentSlide.isBioSlide) {
+                                // Hide the automatic title for bio slide
+                                document.getElementById('currentTitle').style.display = 'none';
+                                
                                 bodyHTML = '<div style="display: flex; flex-direction: column; align-items: center; gap: 2rem; text-align: center;">' +
+                                    '<h1 style="color: #c75300; margin: 0; font-size: 2.5rem; text-align: center;">Thanks for Joining! 🙏</h1>' +
                                     '<img src="/photo.jpg" alt="Mick Davies" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid #c75300; box-shadow: 0 4px 20px rgba(199, 83, 0, 0.3);">' +
-                                    '<h2 style="color: #c75300; margin: 0; font-size: 2rem;">Mick Davies</h2>' +
-                                    '<p style="font-size: 1.1rem; color: #555; margin: 0.5rem 0;">📧 <a href="mailto:mick@5150studios.com.au" style="color: #c75300; text-decoration: none;">mick@5150studios.com.au</a></p>' +
+                                    '<h2 style="color: #333; margin: 0; font-size: 1.8rem;">Mick Davies</h2>' +
+                                    '<p style="font-size: 1.1rem; color: #555; margin: 0.5rem 0;"><i class="fas fa-envelope" style="color: #c75300; margin-right: 0.5rem;"></i><a href="mailto:mick@5150studios.com.au" style="color: #c75300; text-decoration: none;">mick@5150studios.com.au</a></p>' +
                                     '<div style="margin-top: 1.5rem;">' +
                                     '<h3 style="color: #c75300; font-size: 1.4rem; margin-bottom: 1rem;">Connect with me</h3>' +
                                     '<div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 1rem; text-align: left;">' +
-                                    '<div>𝕏 <a href="https://x.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
-                                    '<div>📷 <a href="https://instagram.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
-                                    '<div>💼 <a href="https://linkedin.com/in/mickdaviesaus" target="_blank" style="color: #333; text-decoration: none;">mickdaviesaus</a></div>' +
+                                    '<div><i class="fab fa-x-twitter" style="width: 1.5rem; color: #333;"></i><a href="https://x.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
+                                    '<div><i class="fab fa-instagram" style="width: 1.5rem; color: #E4405F;"></i><a href="https://instagram.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
+                                    '<div><i class="fab fa-linkedin" style="width: 1.5rem; color: #0077B5;"></i><a href="https://linkedin.com/in/mickdaviesaus" target="_blank" style="color: #333; text-decoration: none;">mickdaviesaus</a></div>' +
                                     '</div></div>' +
                                     '<div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #ddd;">' +
-                                    '<h4 style="color: #c75300; font-size: 1.2rem; margin-bottom: 0.5rem;">📦 Get the Code</h4>' +
+                                    '<h4 style="color: #c75300; font-size: 1.2rem; margin-bottom: 0.5rem;"><i class="fab fa-github" style="margin-right: 0.5rem;"></i>Get the Code</h4>' +
                                     '<p style="font-size: 0.9rem; color: #555; margin: 0;"><a href="https://github.com/seivad/cloudflare-talk" target="_blank" style="color: #c75300; text-decoration: none; font-weight: 600;">github.com/seivad/cloudflare-talk</a></p>' +
                                     '</div></div>';
                             } else {
+                                // Show the title for regular slides
+                                document.getElementById('currentTitle').style.display = 'block';
+                                
                                 // Regular slide content
                                 // Add content paragraphs
                                 if (data.data.currentSlide.content && data.data.currentSlide.content.length > 0) {
@@ -515,22 +529,29 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                             
                             // Check if this is the bio slide
                             if (data.data.isBioSlide) {
+                                // Hide the automatic title for bio slide
+                                document.getElementById('currentTitle').style.display = 'none';
+                                
                                 bodyHTML = '<div style="display: flex; flex-direction: column; align-items: center; gap: 2rem; text-align: center;">' +
+                                    '<h1 style="color: #c75300; margin: 0; font-size: 2.5rem; text-align: center;">Thanks for Joining! 🙏</h1>' +
                                     '<img src="/photo.jpg" alt="Mick Davies" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid #c75300; box-shadow: 0 4px 20px rgba(199, 83, 0, 0.3);">' +
-                                    '<h2 style="color: #c75300; margin: 0; font-size: 2rem;">Mick Davies</h2>' +
-                                    '<p style="font-size: 1.1rem; color: #555; margin: 0.5rem 0;">📧 <a href="mailto:mick@5150studios.com.au" style="color: #c75300; text-decoration: none;">mick@5150studios.com.au</a></p>' +
+                                    '<h2 style="color: #333; margin: 0; font-size: 1.8rem;">Mick Davies</h2>' +
+                                    '<p style="font-size: 1.1rem; color: #555; margin: 0.5rem 0;"><i class="fas fa-envelope" style="color: #c75300; margin-right: 0.5rem;"></i><a href="mailto:mick@5150studios.com.au" style="color: #c75300; text-decoration: none;">mick@5150studios.com.au</a></p>' +
                                     '<div style="margin-top: 1.5rem;">' +
                                     '<h3 style="color: #c75300; font-size: 1.4rem; margin-bottom: 1rem;">Connect with me</h3>' +
                                     '<div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 1rem; text-align: left;">' +
-                                    '<div>𝕏 <a href="https://x.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
-                                    '<div>📷 <a href="https://instagram.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
-                                    '<div>💼 <a href="https://linkedin.com/in/mickdaviesaus" target="_blank" style="color: #333; text-decoration: none;">mickdaviesaus</a></div>' +
+                                    '<div><i class="fab fa-x-twitter" style="width: 1.5rem; color: #333;"></i><a href="https://x.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
+                                    '<div><i class="fab fa-instagram" style="width: 1.5rem; color: #E4405F;"></i><a href="https://instagram.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
+                                    '<div><i class="fab fa-linkedin" style="width: 1.5rem; color: #0077B5;"></i><a href="https://linkedin.com/in/mickdaviesaus" target="_blank" style="color: #333; text-decoration: none;">mickdaviesaus</a></div>' +
                                     '</div></div>' +
                                     '<div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #ddd;">' +
-                                    '<h4 style="color: #c75300; font-size: 1.2rem; margin-bottom: 0.5rem;">📦 Get the Code</h4>' +
+                                    '<h4 style="color: #c75300; font-size: 1.2rem; margin-bottom: 0.5rem;"><i class="fab fa-github" style="margin-right: 0.5rem;"></i>Get the Code</h4>' +
                                     '<p style="font-size: 0.9rem; color: #555; margin: 0;"><a href="https://github.com/seivad/cloudflare-talk" target="_blank" style="color: #c75300; text-decoration: none; font-weight: 600;">github.com/seivad/cloudflare-talk</a></p>' +
                                     '</div></div>';
                             } else {
+                                // Show the title for regular slides
+                                document.getElementById('currentTitle').style.display = 'block';
+                                
                                 // Regular slide content
                                 // Add content paragraphs
                                 if (data.data.content && data.data.content.length > 0) {
@@ -604,6 +625,27 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
         // Connect on load
         let websocket = connectWebSocket();
         
+        // Add participant to the session
+        async function registerParticipant() {
+            const userId = getUserId();
+            try {
+                const response = await fetch(\`/api/session/\${roomId}/add-participant\`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, isPresenter: false })
+                });
+                
+                if (!response.ok) {
+                    console.error('Failed to register participant');
+                }
+            } catch (error) {
+                console.error('Error registering participant:', error);
+            }
+        }
+        
+        // Register participant on load
+        registerParticipant();
+        
         // Reconnect when tab becomes visible
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
@@ -672,7 +714,7 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
             }
             
             // Start timer
-            let timeRemaining = pollData.duration || 30;
+            let timeRemaining = pollData.duration || 20;
             const pollTimerEl = document.getElementById('pollTimer');
             if (pollTimerEl) {
                 pollTimerEl.textContent = timeRemaining;

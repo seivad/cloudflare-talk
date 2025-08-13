@@ -7,6 +7,12 @@ import { generateQRCode, generateQRCodeSVG } from './utils/qr-generator';
 import { voteQueueConsumer } from './queue/vote-processor';
 import { SLIDES_HTML, AUDIENCE_HTML } from './html-content';
 import { WELCOME_HTML } from './welcome-html';
+import { PRESENTER_HTML } from './presenter-html';
+import { AUDIENCE_ENTRY_HTML } from './audience-entry-html';
+import { ADMIN_HTML } from './admin-html';
+import { runImport } from './utils/import-json';
+import { generateSessionCode, generatePresenterToken } from './utils/session-code';
+import { PresentationQueries } from './db/queries';
 
 export { SlideRoom, PollRoom, ContainerStatus };
 
@@ -32,16 +38,37 @@ app.get('/', (c) => {
   return c.html(WELCOME_HTML);
 });
 
+// Presenter dashboard
+app.get('/presenter', async (c) => {
+  return c.html(PRESENTER_HTML);
+});
+
+// Admin dashboard
+app.get('/admin', async (c) => {
+  return c.html(ADMIN_HTML);
+});
+
 // Presenter slides view
 app.get('/slides', async (c) => {
+  // Check if this is a session-based view
+  const sessionCode = c.req.query('session');
+  const presenterToken = c.req.query('token');
+  
+  if (sessionCode && presenterToken) {
+    // TODO: Validate session and token
+    // For now, just serve the slides with session info embedded
+    let html = SLIDES_HTML;
+    html = html.replace('{{SESSION_CODE}}', sessionCode);
+    html = html.replace('{{PRESENTER_TOKEN}}', presenterToken);
+    return c.html(html);
+  }
+  
   return c.html(SLIDES_HTML);
 });
 
-// Audience participation view (legacy - redirect to room-based URL)
+// Audience entry page (enter session code)
 app.get('/audience', async (c) => {
-  // Redirect to a default room ID for backward compatibility
-  const defaultRoomId = '123456';
-  return c.redirect(`/audience/${defaultRoomId}`);
+  return c.html(AUDIENCE_ENTRY_HTML);
 });
 
 // Room-specific audience participation view
@@ -103,11 +130,49 @@ app.get('/qr/:text', async (c) => {
   return Response.redirect(externalUrl, 302);
 });
 
-// WebSocket endpoint for slide synchronization (legacy)
+// WebSocket endpoint for slide synchronization (legacy - create default session)
 app.get('/ws/slides', async (c) => {
-  const id = c.env.SLIDE_ROOM.idFromName('main');
-  const stub = c.env.SLIDE_ROOM.get(id);
-  return stub.fetch(c.req.raw);
+  try {
+    // For legacy support, use a default session code
+    const defaultSessionCode = '123456';
+    const id = c.env.SLIDE_ROOM.idFromName(`room-${defaultSessionCode}`);
+    const stub = c.env.SLIDE_ROOM.get(id);
+    
+    // Try to get a presentation ID from D1
+    let presentationId = null;
+    try {
+      const result = await c.env.DB.prepare(
+        `SELECT id FROM presentations WHERE is_active = 1 LIMIT 1`
+      ).first();
+      if (result) {
+        presentationId = result.id as string;
+      }
+    } catch (dbError) {
+      console.log('No presentations in database yet, using fallback');
+    }
+    
+    // If we have a presentation, initialize the session
+    if (presentationId) {
+      await stub.fetch(new Request('http://localhost/internal/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          presentationId,
+          sessionCode: defaultSessionCode,
+          presenterToken: 'default-presenter-token'
+        })
+      }));
+    }
+    
+    // Return the WebSocket connection regardless
+    return stub.fetch(c.req.raw);
+  } catch (error) {
+    console.error('Error in /ws/slides:', error);
+    // Still try to return the WebSocket connection
+    const id = c.env.SLIDE_ROOM.idFromName('room-123456');
+    const stub = c.env.SLIDE_ROOM.get(id);
+    return stub.fetch(c.req.raw);
+  }
 });
 
 // Room-based WebSocket endpoint for slide synchronization
@@ -166,7 +231,7 @@ app.post('/api/vote', async (c) => {
   if (!response.ok) {
     const errorText = await response.text();
     console.error('Vote failed:', errorText);
-    return c.json({ error: errorText }, response.status);
+    return c.json({ error: errorText }, response.status as any);
   }
 
   return c.json({ success: true });
@@ -193,7 +258,8 @@ app.post('/api/poll/start', async (c) => {
     body: JSON.stringify(body)
   });
 
-  return c.json(await response.json());
+  const data = await response.json();
+  return c.json(data as any);
 });
 
 // API: Force poll winner (admin)
@@ -216,7 +282,8 @@ app.post('/api/poll/pick', async (c) => {
     body: JSON.stringify(body)
   });
 
-  return c.json(await response.json());
+  const data = await response.json();
+  return c.json(data as any);
 });
 
 // API: Navigate to slide (admin)
@@ -311,7 +378,8 @@ app.get('/api/state', async (c) => {
   const slideStub = c.env.SLIDE_ROOM.get(slideId);
   
   const response = await slideStub.fetch('http://internal/state');
-  return c.json(await response.json());
+  const data = await response.json();
+  return c.json(data as any);
 });
 
 // API: Get available poll options (excluding visited slides)
@@ -327,10 +395,136 @@ app.get('/api/poll-options', async (c) => {
   if (!response.ok) {
     const errorText = await response.text();
     console.error('Poll options failed:', errorText);
-    return c.json({ error: errorText }, response.status);
+    return c.json({ error: errorText }, response.status as any);
   }
   
-  return c.json(await response.json());
+  const data = await response.json();
+  return c.json(data as any);
+});
+
+// API: Get slides for a presentation
+app.get('/api/presentations/:presentationId/slides', async (c) => {
+  try {
+    const presentationId = c.req.param('presentationId');
+    const result = await c.env.DB.prepare(
+      `SELECT * FROM slides WHERE presentation_id = ? ORDER BY order_number`
+    ).bind(presentationId).all();
+    
+    return c.json(result.results || []);
+  } catch (error) {
+    console.error('Failed to fetch slides:', error);
+    return c.json({ error: 'Failed to fetch slides' }, 500);
+  }
+});
+
+// API: Get all presentations
+app.get('/api/presentations', async (c) => {
+  try {
+    const queries = new PresentationQueries(c.env.DB);
+    const presentations = await queries.getAllPresentations();
+    
+    // Add slide counts (simplified for now)
+    const presentationsWithCounts = presentations.map(p => ({
+      ...p,
+      slide_count: 13 // TODO: Get actual count from slides table
+    }));
+    
+    return c.json(presentationsWithCounts);
+  } catch (error) {
+    console.error('Failed to fetch presentations:', error);
+    return c.json({ error: 'Failed to fetch presentations' }, 500);
+  }
+});
+
+// API: Add participant to session
+app.post('/api/session/:sessionCode/add-participant', async (c) => {
+  try {
+    const sessionCode = c.req.param('sessionCode');
+    const body = await c.req.json<{ userId: string; isPresenter?: boolean }>();
+    
+    // Get the SlideRoom Durable Object for this session
+    const roomId = c.env.SLIDE_ROOM.idFromName(`room-${sessionCode}`);
+    const roomStub = c.env.SLIDE_ROOM.get(roomId);
+    
+    // Add participant to the session
+    const response = await roomStub.fetch(new Request('http://localhost/internal/add-participant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }));
+    
+    if (!response.ok) {
+      throw new Error('Failed to add participant');
+    }
+    
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('Failed to add participant:', error);
+    return c.json({ error: 'Failed to add participant' }, 500);
+  }
+});
+
+// API: Start a new presentation session
+app.post('/api/presenter/start-session', async (c) => {
+  try {
+    const body = await c.req.json<{ presentationId: string }>();
+    
+    // Generate session code and presenter token
+    const sessionCode = generateSessionCode();
+    const presenterToken = generatePresenterToken();
+    
+    // Get the SlideRoom Durable Object for this session
+    const roomId = c.env.SLIDE_ROOM.idFromName(`room-${sessionCode}`);
+    const roomStub = c.env.SLIDE_ROOM.get(roomId);
+    
+    // Initialize the session in the Durable Object
+    const initResponse = await roomStub.fetch(new Request('http://localhost/internal/init', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        presentationId: body.presentationId,
+        sessionCode,
+        presenterToken
+      })
+    }));
+    
+    if (!initResponse.ok) {
+      throw new Error('Failed to initialize session');
+    }
+    
+    return c.json({
+      success: true,
+      sessionCode,
+      presenterToken,
+      presentationId: body.presentationId
+    });
+  } catch (error) {
+    console.error('Failed to start session:', error);
+    return c.json({ error: 'Failed to start session' }, 500);
+  }
+});
+
+// Admin: Import default presentation
+app.post('/admin/import-default', async (c) => {
+  const adminKey = c.req.header('X-Admin-Key');
+  if (adminKey !== c.env.ADMIN_KEY) {
+    return c.text('Unauthorized', 401);
+  }
+
+  try {
+    const presentationId = await runImport(c.env.DB);
+    return c.json({ 
+      success: true, 
+      presentationId,
+      message: 'Default presentation imported successfully'
+    });
+  } catch (error) {
+    console.error('Import failed:', error);
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
 });
 
 // Export queue consumer

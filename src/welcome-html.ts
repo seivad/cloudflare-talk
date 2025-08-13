@@ -3,7 +3,7 @@ export const WELCOME_HTML = `<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloudflare Tech Talk - Welcome</title>
+    <title>Extending Monoliths: No rewrites, No Limits, No Mercy!</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -454,8 +454,10 @@ export const WELCOME_HTML = `<!DOCTYPE html>
     <div class="welcome-container">
         <div class="logo">⚡</div>
         
-        <h1>Welcome to the Edge</h1>
-        <p class="subtitle">Build Globally Distributed Applications with Cloudflare Workers</p>
+        <h1>Extending Monoliths</h1>
+        <h2 style="font-size: clamp(1.8rem, 5vw, 2.5rem); margin-bottom: 1.5rem; font-weight: 700;">No rewrites, No Limits, No Mercy!</h2>
+        <p class="subtitle">No rewrites, no limits — just pure edge firepower, unstoppable security, and scale to rule region earth!</p>
+        <p style="font-size: clamp(1.1rem, 3vw, 1.4rem); margin-top: 1rem; opacity: 0.95; font-style: italic;">You steer the talk… I'll make it legendary!</p>
         
         <div class="feature-grid">
             <div class="feature-card">

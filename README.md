@@ -196,7 +196,7 @@ curl -X POST http://localhost:8787/api/dummy-votes \
 curl -X POST http://localhost:8787/api/poll/start \
   -H "X-Admin-Key: tech-talk-2025" \
   -H "Content-Type: application/json" \
-  -d '{"nodeId": "start", "duration": 30000}'
+  -d '{"nodeId": "start", "duration": 20000}'
 
 # Pick a winner
 curl -X POST http://localhost:8787/api/poll/pick \
@@ -209,7 +209,7 @@ curl -X POST http://localhost:8787/api/poll/pick \
 
 1. **Test everything beforehand** - Run through the entire flow at least once
 2. **Have backup plans** - Use simulation mode if internet fails
-3. **Keep polls short** - 30 seconds is ideal
+3. **Keep polls short** - 20 seconds is ideal
 4. **Engage early** - Start with a warm-up poll
 5. **Practice transitions** - Know your keyboard shortcuts
 6. **Monitor participation** - Watch the participant count

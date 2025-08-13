@@ -5,6 +5,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cloudflare Tech Talk - Presenter View</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -69,6 +70,46 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
 
         .slide.active {
             display: block;
+        }
+        
+        .slide.with-gif {
+            display: none;
+        }
+        
+        .slide.with-gif.active {
+            display: flex;
+            gap: 3rem;
+        }
+        
+        .slide-content-wrapper {
+            flex: 0 0 70%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .slide-gif-wrapper {
+            flex: 0 0 30%;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 0 2rem;
+        }
+        
+        .slide-gif-container {
+            width: min(100%, 400px);
+            aspect-ratio: 1;
+            border-radius: 50%;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            background: #f0f0f0;
+        }
+        
+        .slide-gif {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
         }
 
         @keyframes slideIn {
@@ -145,10 +186,11 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         }
 
         .slide ul {
-            list-style-position: inside;
+            list-style: none;
             font-size: 1.3rem;
             line-height: 2;
             color: #555;
+            padding-left: 0;
         }
 
         .slide ul li {
@@ -165,7 +207,39 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         }
         
         .poll-slide.active {
-            display: block;
+            display: flex;
+            gap: 3rem;
+        }
+        
+        .poll-content-wrapper {
+            flex: 0 0 70%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .poll-gif-wrapper {
+            flex: 0 0 30%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 2rem;
+        }
+        
+        .poll-gif-container {
+            width: min(100%, 400px);
+            aspect-ratio: 1;
+            border-radius: 50%;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            background: #f0f0f0;
+        }
+        
+        .poll-gif {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
         }
         
         .poll-header {
@@ -285,10 +359,19 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
     </div>
 
     <script>
-        // Generate or retrieve 6-digit room ID
-        let roomId = localStorage.getItem('presentationRoomId');
+        // Get session code from URL parameters if present, otherwise generate/retrieve room ID
+        const urlParams = new URLSearchParams(window.location.search);
+        let roomId = urlParams.get('session');
+        
         if (!roomId) {
-            roomId = Math.floor(100000 + Math.random() * 900000).toString();
+            // Fall back to localStorage for backwards compatibility
+            roomId = localStorage.getItem('presentationRoomId');
+            if (!roomId) {
+                roomId = Math.floor(100000 + Math.random() * 900000).toString();
+                localStorage.setItem('presentationRoomId', roomId);
+            }
+        } else {
+            // Store the session code for consistency
             localStorage.setItem('presentationRoomId', roomId);
         }
         
@@ -493,12 +576,12 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            const urlParams = new URLSearchParams(window.location.search);
+            // Check for admin mode
             if (urlParams.get('admin') === '1') {
                 document.body.classList.add('admin-mode');
             }
 
-            // Display room ID
+            // Display room ID (session code)
             document.getElementById('roomIdDisplay').textContent = roomId;
             
             slides = generateSlides();
@@ -630,6 +713,11 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                     if (data.data) {
                         if (data.data.currentSlideIndex !== undefined) {
                             currentSlideIndex = data.data.currentSlideIndex;
+                        }
+                        // Update slide content if provided from server
+                        if (data.data.currentSlide) {
+                            updateSlideContentFromServer(data.data.currentSlide);
+                        } else {
                             updateSlideDisplay();
                         }
                         if (data.data.participantCount !== undefined) {
@@ -645,9 +733,12 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                     break;
                 
                 case 'slideChanged':
-                    if (data.data && data.data.index !== undefined) {
-                        currentSlideIndex = data.data.index;
-                        updateSlideDisplay();
+                    if (data.data) {
+                        if (data.data.index !== undefined) {
+                            currentSlideIndex = data.data.index;
+                        }
+                        // Update with server content
+                        updateSlideContentFromServer(data.data);
                     }
                     break;
                     
@@ -701,6 +792,129 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             
             // Slide number element was removed with admin controls
             // No need to update it anymore
+        }
+        
+        function updateSlideContentFromServer(slideData) {
+            const slideDiv = document.querySelector('.slide.active');
+            if (!slideDiv) return;
+            
+            // Check if this is the bio slide
+            if (slideData.isBioSlide) {
+                // Create custom bio slide content
+                slideDiv.innerHTML = 
+                    '<div style="display: flex; align-items: center; justify-content: center; gap: 4rem; height: 100%;">' +
+                        '<div style="text-align: center;">' +
+                            '<img src="/photo.jpg" alt="Mick Davies" style="width: 200px; height: 200px; border-radius: 50%; object-fit: cover; border: 4px solid #c75300; box-shadow: 0 8px 32px rgba(199, 83, 0, 0.3); margin-bottom: 2rem;">' +
+                            '<h1 style="color: #c75300; margin-bottom: 0.5rem; font-size: 3.5rem;">Thanks for Joining! 🙏</h1>' +
+                            '<h2 style="color: #333; margin-bottom: 2rem; font-size: 2.5rem;">Mick Davies</h2>' +
+                            '<p style="font-size: 1.6rem; color: #555; margin-bottom: 1rem;"><i class="fas fa-envelope" style="color: #c75300; margin-right: 0.5rem;"></i><a href="mailto:mick@5150studios.com.au" style="color: #c75300; text-decoration: none;">mick@5150studios.com.au</a></p>' +
+                        '</div>' +
+                        '<div style="text-align: left;">' +
+                            '<h3 style="color: #c75300; font-size: 2.2rem; margin-bottom: 1.5rem;">Connect with me</h3>' +
+                            '<div style="display: flex; flex-direction: column; gap: 1rem; font-size: 1.4rem;">' +
+                                '<div style="display: flex; align-items: center; gap: 1rem;"><i class="fab fa-x-twitter" style="font-size: 1.6rem; width: 2rem; color: #333;"></i><a href="https://x.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
+                                '<div style="display: flex; align-items: center; gap: 1rem;"><i class="fab fa-instagram" style="font-size: 1.6rem; width: 2rem; color: #E4405F;"></i><a href="https://instagram.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
+                                '<div style="display: flex; align-items: center; gap: 1rem;"><i class="fab fa-linkedin" style="font-size: 1.6rem; width: 2rem; color: #0077B5;"></i><a href="https://linkedin.com/in/mickdaviesaus" target="_blank" style="color: #333; text-decoration: none;">mickdaviesaus</a></div>' +
+                            '</div>' +
+                            '<div style="margin-top: 2.5rem; padding-top: 1.5rem; border-top: 2px solid #e0e0e0;">' +
+                                '<h4 style="color: #c75300; font-size: 1.6rem; margin-bottom: 1rem;"><i class="fab fa-github" style="margin-right: 0.5rem;"></i>Get the Code</h4>' +
+                                '<p style="font-size: 1.2rem; color: #555;"><a href="https://github.com/seivad/cloudflare-talk" target="_blank" style="color: #c75300; text-decoration: none; font-weight: 600;">github.com/seivad/cloudflare-talk</a></p>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>';
+            } else {
+                // Regular slide content from server
+                slideDiv.innerHTML = '';
+                
+                // Check if slide has a GIF
+                if (slideData.gif) {
+                    // Add with-gif class and create split layout
+                    slideDiv.classList.add('with-gif');
+                    
+                    // Create content wrapper
+                    const contentWrapper = document.createElement('div');
+                    contentWrapper.className = 'slide-content-wrapper';
+                    
+                    // Add title
+                    const title = document.createElement(currentSlideIndex === 0 ? 'h1' : 'h2');
+                    title.textContent = slideData.title || 'Untitled';
+                    contentWrapper.appendChild(title);
+                    
+                    // Add content paragraphs
+                    if (slideData.content && Array.isArray(slideData.content)) {
+                        slideData.content.forEach(text => {
+                            const p = document.createElement('p');
+                            p.textContent = text;
+                            if (currentSlideIndex === 0) {
+                                p.style.fontSize = '2rem';
+                                p.style.color = '#0078d4';
+                            }
+                            contentWrapper.appendChild(p);
+                        });
+                    }
+                    
+                    // Add bullet points if any
+                    if (slideData.bullets && slideData.bullets.length > 0) {
+                        const ul = document.createElement('ul');
+                        slideData.bullets.forEach(bullet => {
+                            const li = document.createElement('li');
+                            li.textContent = bullet;
+                            ul.appendChild(li);
+                        });
+                        contentWrapper.appendChild(ul);
+                    }
+                    
+                    // Create GIF wrapper
+                    const gifWrapper = document.createElement('div');
+                    gifWrapper.className = 'slide-gif-wrapper';
+                    
+                    const gifContainer = document.createElement('div');
+                    gifContainer.className = 'slide-gif-container';
+                    
+                    const gif = document.createElement('img');
+                    gif.src = slideData.gif;
+                    gif.alt = 'Slide animation';
+                    gif.className = 'slide-gif';
+                    
+                    gifContainer.appendChild(gif);
+                    gifWrapper.appendChild(gifContainer);
+                    
+                    slideDiv.appendChild(contentWrapper);
+                    slideDiv.appendChild(gifWrapper);
+                } else {
+                    // No GIF, render normally
+                    slideDiv.classList.remove('with-gif');
+                    
+                    // Add title
+                    const title = document.createElement(currentSlideIndex === 0 ? 'h1' : 'h2');
+                    title.textContent = slideData.title || 'Untitled';
+                    slideDiv.appendChild(title);
+                    
+                    // Add content paragraphs
+                    if (slideData.content && Array.isArray(slideData.content)) {
+                        slideData.content.forEach(text => {
+                            const p = document.createElement('p');
+                            p.textContent = text;
+                            if (currentSlideIndex === 0) {
+                                p.style.fontSize = '2rem';
+                                p.style.color = '#0078d4';
+                            }
+                            slideDiv.appendChild(p);
+                        });
+                    }
+                    
+                    // Add bullet points if any (for non-GIF slides)
+                    if (slideData.bullets && slideData.bullets.length > 0) {
+                        const ul = document.createElement('ul');
+                        slideData.bullets.forEach(bullet => {
+                            const li = document.createElement('li');
+                            li.textContent = bullet;
+                            ul.appendChild(li);
+                        });
+                        slideDiv.appendChild(ul);
+                    }
+                }
+            }
         }
 
         function sendSlideUpdate() {
@@ -783,7 +997,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                     pollId: 'poll-' + Date.now(),
                     question: pollOptions.question,
                     options: pollOptions.options,
-                    duration: 30,
+                    duration: 20,
                     isReset: pollOptions.reset
                 };
                 
@@ -807,7 +1021,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                         { id: 'manual1', label: 'Continue with next slide' },
                         { id: 'manual2', label: 'Skip to different section' }
                     ],
-                    duration: 30
+                    duration: 20
                 };
                 showPollOverlay(fallbackData);
             }
@@ -853,6 +1067,27 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             // Hide regular slides
             document.getElementById('slideContent').style.display = 'none';
             
+            // List of available GIFs (excluding the mp4 file)
+            const availableGifs = [
+                'cosmo-kramer-head-nod.gif',
+                'fire-elmo.gif',
+                'jim-looking-at-camera.gif',
+                'jim-the-office.gif',
+                'magatron-strangling-starscream.gif',
+                'michael-scott-wink.gif',
+                'moss-brilliant.gif',
+                'moss-fire.gif',
+                'moss-roy-first-bump.gif',
+                'nicolas-cage-happy.gif',
+                'pedro-pascal-nicolas-cage.gif',
+                'seinfeld-kramer.gif',
+                'suss-monkey.gif',
+                'thumbs-up-computer-kid.gif'
+            ];
+            
+            // Select a random GIF
+            const randomGif = availableGifs[Math.floor(Math.random() * availableGifs.length)];
+            
             // Create or update poll slide
             let pollSlide = document.querySelector('.poll-slide');
             if (!pollSlide) {
@@ -862,36 +1097,48 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             }
             
             pollSlide.innerHTML = \`
-                <div class="poll-header">
-                    <h2 class="poll-question">\${pollData.question || 'What should we explore next?'}</h2>
-                    <div class="poll-timer" id="pollTimer">30</div>
-                </div>
-                <div class="poll-options" id="pollOptions">
-                    \${pollData.options.map(option => \`
-                        <div class="poll-option" data-option-id="\${option.id}">
-                            <div class="poll-option-bar" style="width: 0%"></div>
-                            <div class="poll-option-content">
-                                <span class="poll-option-label">\${option.label}</span>
-                                <div>
-                                    <span class="poll-option-votes" data-votes="\${option.id}">0</span>
-                                    <span class="poll-option-percentage" data-percentage="\${option.id}">0%</span>
+                <div class="poll-content-wrapper">
+                    <div class="poll-header">
+                        <h2 class="poll-question">\${pollData.question || 'What should we explore next?'}</h2>
+                        <div class="poll-timer" id="pollTimer">20</div>
+                    </div>
+                    <div class="poll-options" id="pollOptions">
+                        \${pollData.options.map(option => \`
+                            <div class="poll-option" data-option-id="\${option.id}">
+                                <div class="poll-option-bar" style="width: 0%"></div>
+                                <div class="poll-option-content">
+                                    <span class="poll-option-label">\${option.label}</span>
+                                    <div>
+                                        <span class="poll-option-votes" data-votes="\${option.id}">0</span>
+                                        <span class="poll-option-percentage" data-percentage="\${option.id}">0%</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    \`).join('')}
+                        \`).join('')}
+                    </div>
+                </div>
+                <div class="poll-gif-wrapper">
+                    <div class="poll-gif-container">
+                        <img src="/gifs/\${randomGif}" alt="Poll animation" class="poll-gif" />
+                    </div>
                 </div>
             \`;
             
             pollSlide.classList.add('active');
             
             // Start timer
-            let timeRemaining = pollData.duration || 30;
+            let timeRemaining = pollData.duration || 20;
+            const timerElement = document.getElementById('pollTimer');
+            if (timerElement) {
+                timerElement.textContent = timeRemaining;
+            }
+            
             if (pollTimer) clearInterval(pollTimer);
             pollTimer = setInterval(() => {
                 timeRemaining--;
-                const timerElement = document.getElementById('pollTimer');
-                if (timerElement) {
-                    timerElement.textContent = timeRemaining;
+                const timerEl = document.getElementById('pollTimer');
+                if (timerEl) {
+                    timerEl.textContent = timeRemaining;
                 }
                 if (timeRemaining <= 0) {
                     clearInterval(pollTimer);

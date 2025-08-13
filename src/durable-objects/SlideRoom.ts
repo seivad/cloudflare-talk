@@ -1,6 +1,9 @@
+import { DurableObjectState, DurableObjectNamespace } from '@cloudflare/workers-types';
+
 interface Env {
   ASSETS_BUCKET: R2Bucket;
   POLL_ROOM: DurableObjectNamespace;
+  DB: D1Database;
 }
 
 interface SlideState {
@@ -10,6 +13,9 @@ interface SlideState {
   adventureData?: any;
   participantCount: number;
   visitedSlides: Set<number>;
+  sessionCode?: string;
+  presentationId?: string;
+  presenterToken?: string;
 }
 
 export class SlideRoom {
@@ -19,11 +25,14 @@ export class SlideRoom {
   private slideState: SlideState;
   private activePoll: any;
   private pollTimer: any;
+  private sql: any; // Durable Object SQL storage
+  private presentationData: any[] = [];
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
     this.clients = new Set();
+    this.sql = state.storage.sql;
     this.slideState = {
       currentSlideIndex: 0,
       currentNodeId: 'start',
@@ -31,6 +40,60 @@ export class SlideRoom {
       participantCount: 0,
       visitedSlides: new Set([0]) // Start with welcome slide as visited
     };
+    
+    // Initialize SQL tables on construction
+    this.initializeSQLTables();
+  }
+
+  private async initializeSQLTables() {
+    try {
+      // Check if SQL is available
+      if (!this.sql || typeof this.sql.exec !== 'function') {
+        console.log('SQL storage not available yet, skipping table initialization');
+        return;
+      }
+      
+      // Create participants table
+      await this.sql.exec(`
+        CREATE TABLE IF NOT EXISTS participants (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          joined_at INTEGER NOT NULL,
+          last_seen INTEGER NOT NULL,
+          is_presenter INTEGER DEFAULT 0
+        )
+      `);
+      
+      // Create poll votes table
+      await this.sql.exec(`
+        CREATE TABLE IF NOT EXISTS poll_votes (
+          id TEXT PRIMARY KEY,
+          poll_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          option_id TEXT NOT NULL,
+          voted_at INTEGER NOT NULL
+        )
+      `);
+      
+      // Create unique index for preventing duplicate votes
+      await this.sql.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_poll_votes_unique 
+        ON poll_votes(poll_id, user_id)
+      `);
+      
+      // Create session info table
+      await this.sql.exec(`
+        CREATE TABLE IF NOT EXISTS session_info (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        )
+      `);
+      
+      console.log('SQL tables initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize SQL tables:', error);
+      // Don't throw - allow the DO to continue working without SQL features
+    }
   }
 
   private async loadState() {
@@ -41,11 +104,73 @@ export class SlideRoom {
         visitedSlides: new Set((storedState as any).visitedSlides || [0])
       };
     }
+    
+    // Load presentation data if we have a presentationId
+    if (this.slideState.presentationId && this.presentationData.length === 0) {
+      await this.loadPresentationFromD1(this.slideState.presentationId);
+    }
+  }
+  
+  private async loadPresentationFromD1(presentationId: string) {
+    try {
+      // Query slides from D1
+      const result = await this.env.DB.prepare(
+        `SELECT * FROM slides WHERE presentation_id = ? ORDER BY order_number`
+      ).bind(presentationId).all();
+      
+      if (result.results) {
+        this.presentationData = result.results;
+        console.log(`Loaded ${this.presentationData.length} slides for presentation ${presentationId}`);
+      }
+    } catch (error) {
+      console.error('Failed to load presentation from D1:', error);
+    }
+  }
+  
+  async initializeSession(presentationId: string, sessionCode: string, presenterToken?: string) {
+    // Store session information
+    this.slideState.presentationId = presentationId;
+    this.slideState.sessionCode = sessionCode;
+    if (presenterToken) {
+      this.slideState.presenterToken = presenterToken;
+    }
+    
+    // Save to storage
+    await this.saveState();
+    
+    // Load presentation data from D1
+    await this.loadPresentationFromD1(presentationId);
+    
+    // Store session info in SQL if available
+    if (this.sql && typeof this.sql.exec === 'function') {
+      try {
+        await this.sql.exec(
+          `INSERT OR REPLACE INTO session_info (key, value) VALUES (?, ?), (?, ?), (?, ?)`,
+          'presentation_id', presentationId,
+          'session_code', sessionCode,
+          'started_at', Date.now().toString()
+        );
+      } catch (error) {
+        console.error('Failed to store session info in SQL:', error);
+        // Continue without SQL storage
+      }
+    }
+    
+    return {
+      success: true,
+      sessionCode,
+      presentationId
+    };
   }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     console.log('SlideRoom received request:', url.pathname);
+    
+    // Load state on first request
+    if (!this.slideState.sessionCode) {
+      await this.loadState();
+    }
 
     // WebSocket upgrade for real-time sync
     if (request.headers.get('Upgrade') === 'websocket') {
@@ -65,7 +190,8 @@ export class SlideRoom {
         type: 'state',
         data: {
           ...this.slideState,
-          currentSlide: slideInfo
+          currentSlide: slideInfo,
+          visitedSlides: Array.from(this.slideState.visitedSlides) // Convert Set to Array for JSON
         }
       }));
       
@@ -80,6 +206,8 @@ export class SlideRoom {
 
     // Internal API endpoints
     switch (url.pathname) {
+      case '/internal/init':
+        return this.handleInitSession(request);
       case '/internal/goto':
         return this.handleGoto(request);
       case '/internal/startPoll':
@@ -94,6 +222,8 @@ export class SlideRoom {
         return this.handleVote(request);
       case '/internal/poll-options':
         return this.handleGetPollOptions();
+      case '/internal/add-participant':
+        return this.handleAddParticipant(request);
       default:
         return new Response('Not found', { status: 404 });
     }
@@ -154,6 +284,70 @@ export class SlideRoom {
     });
   }
 
+  private async handleInitSession(request: Request): Promise<Response> {
+    const body = await request.json() as { 
+      presentationId: string; 
+      sessionCode: string; 
+      presenterToken?: string 
+    };
+    const result = await this.initializeSession(
+      body.presentationId,
+      body.sessionCode,
+      body.presenterToken
+    );
+    return new Response(JSON.stringify(result));
+  }
+  
+  private async handleAddParticipant(request: Request): Promise<Response> {
+    const body = await request.json() as { 
+      userId: string; 
+      isPresenter?: boolean 
+    };
+    
+    try {
+      // If SQL is available, use it for participant tracking
+      if (this.sql && typeof this.sql.exec === 'function') {
+        try {
+          // Add participant to SQL
+          const id = crypto.randomUUID();
+          await this.sql.exec(
+            `INSERT OR REPLACE INTO participants (id, user_id, joined_at, last_seen, is_presenter) 
+             VALUES (?, ?, ?, ?, ?)`,
+            id, body.userId, Date.now(), Date.now(), body.isPresenter ? 1 : 0
+          );
+          
+          // Update participant count
+          const countResult = await this.sql.exec(
+            `SELECT COUNT(*) as count FROM participants WHERE last_seen > ?`,
+            Date.now() - 300000 // Active in last 5 minutes
+          );
+          
+          if (countResult && countResult[0]) {
+            this.slideState.participantCount = countResult[0].count;
+          }
+        } catch (sqlError) {
+          console.error('SQL participant tracking failed:', sqlError);
+          // Fall back to simple counting
+          this.slideState.participantCount = this.clients.size;
+        }
+      } else {
+        // No SQL - just use WebSocket client count
+        this.slideState.participantCount = this.clients.size;
+      }
+      
+      // Broadcast participant count
+      this.broadcast({
+        type: 'participantUpdate',
+        data: { count: this.slideState.participantCount }
+      });
+      
+      return new Response(JSON.stringify({ success: true }));
+    } catch (error) {
+      console.error('Failed to add participant:', error);
+      return new Response(JSON.stringify({ error: 'Failed to add participant' }), { status: 500 });
+    }
+  }
+
   private async handleGoto(request: Request): Promise<Response> {
     const body = await request.json() as { index: number };
     await this.navigateToSlide(body.index);
@@ -186,7 +380,7 @@ export class SlideRoom {
         pollId,
         question: node.poll.question,
         options: node.poll.options,
-        duration: body.duration || 30000,
+        duration: body.duration || 20000,
         routes: node.poll.routes
       })
     });
@@ -198,7 +392,7 @@ export class SlideRoom {
         pollId,
         question: node.poll.question,
         options: node.poll.options,
-        endsAt: Date.now() + (body.duration || 30000)
+        endsAt: Date.now() + (body.duration || 20000)
       }
     });
 
@@ -304,7 +498,7 @@ export class SlideRoom {
       console.error('Error in handleGetPollOptions:', error);
       return new Response(JSON.stringify({ 
         error: 'Failed to get poll options',
-        message: error.toString()
+        message: error instanceof Error ? error.message : 'Unknown error'
       }), { 
         status: 500,
         headers: { 'Content-Type': 'application/json' }
@@ -346,45 +540,121 @@ export class SlideRoom {
       return new Response(JSON.stringify({ error: 'Poll not active' }), { status: 400 });
     }
     
-    // Check if user already voted
+    // Track voters in memory if SQL is not available
     if (!this.activePoll.voters) {
       this.activePoll.voters = new Set<string>();
     }
     
-    if (this.activePoll.voters.has && this.activePoll.voters.has(body.userId)) {
+    // Check if user already voted
+    if (this.activePoll.voters instanceof Set && this.activePoll.voters.has(body.userId)) {
       return new Response(JSON.stringify({ error: 'Already voted' }), { status: 400 });
     }
     
-    // Record vote
-    this.activePoll.votes[body.optionId] = (this.activePoll.votes[body.optionId] || 0) + 1;
-    if (this.activePoll.voters.add) {
-      this.activePoll.voters.add(body.userId);
-    } else {
-      // If voters is not a Set (from storage), convert it
-      this.activePoll.voters = new Set(Array.from(this.activePoll.voters as any));
-      this.activePoll.voters.add(body.userId);
-    }
-    
-    console.log('Vote recorded. Current votes:', this.activePoll.votes);
-    
-    // Save to storage
-    await this.state.storage.put('activePoll', this.activePoll);
-    
-    // Broadcast updated vote counts immediately
-    this.broadcast({
-      type: 'pollUpdate',
-      data: {
-        pollId: this.activePoll.pollId,
-        votes: this.activePoll.votes
+    try {
+      // Try to use SQL if available
+      if (this.sql && typeof this.sql.exec === 'function') {
+        try {
+          // Check if user already voted using SQL
+          const existingVote = await this.sql.exec(
+            `SELECT * FROM poll_votes WHERE poll_id = ? AND user_id = ?`,
+            body.pollId, body.userId
+          );
+          
+          if (existingVote && existingVote.length > 0) {
+            return new Response(JSON.stringify({ error: 'Already voted' }), { status: 400 });
+          }
+          
+          // Record vote in SQL
+          const voteId = crypto.randomUUID();
+          await this.sql.exec(
+            `INSERT INTO poll_votes (id, poll_id, user_id, option_id, voted_at) 
+             VALUES (?, ?, ?, ?, ?)`,
+            voteId, body.pollId, body.userId, body.optionId, Date.now()
+          );
+          
+          // Get updated vote counts from SQL for accuracy
+          const voteCounts = await this.sql.exec(
+            `SELECT option_id, COUNT(*) as count 
+             FROM poll_votes 
+             WHERE poll_id = ? 
+             GROUP BY option_id`,
+            body.pollId
+          );
+          
+          if (voteCounts && Array.isArray(voteCounts)) {
+            // Reset votes and update from SQL
+            Object.keys(this.activePoll.votes).forEach(key => {
+              this.activePoll.votes[key] = 0;
+            });
+            
+            voteCounts.forEach((row: any) => {
+              if (row.option_id && row.count !== undefined) {
+                this.activePoll.votes[row.option_id] = row.count;
+              }
+            });
+          } else {
+            // SQL succeeded but format unexpected, just increment in-memory
+            this.activePoll.votes[body.optionId] = (this.activePoll.votes[body.optionId] || 0) + 1;
+          }
+        } catch (sqlError) {
+          console.error('SQL vote recording failed, using in-memory:', sqlError);
+          // SQL failed, increment in-memory count
+          this.activePoll.votes[body.optionId] = (this.activePoll.votes[body.optionId] || 0) + 1;
+        }
+      } else {
+        // No SQL available, just use in-memory counting
+        this.activePoll.votes[body.optionId] = (this.activePoll.votes[body.optionId] || 0) + 1;
       }
-    });
-    
-    console.log('Broadcasted poll update to all clients');
-    
-    return new Response(JSON.stringify({ success: true }));
+      
+      // Add to voters set
+      if (this.activePoll.voters instanceof Set) {
+        this.activePoll.voters.add(body.userId);
+      } else {
+        this.activePoll.voters = new Set([body.userId]);
+      }
+      
+      console.log('Vote recorded. Current votes:', this.activePoll.votes);
+      
+      // Save to storage
+      await this.state.storage.put('activePoll', this.activePoll);
+      
+      // Broadcast updated vote counts immediately
+      this.broadcast({
+        type: 'pollUpdate',
+        data: {
+          pollId: this.activePoll.pollId,
+          votes: this.activePoll.votes
+        }
+      });
+      
+      console.log('Broadcasted poll update to all clients');
+      
+      return new Response(JSON.stringify({ success: true }));
+    } catch (error) {
+      console.error('Failed to record vote:', error);
+      return new Response(JSON.stringify({ error: 'Failed to record vote' }), { status: 500 });
+    }
   }
 
   private getSlideData(index: number) {
+    // If we have presentation data from D1, use it
+    if (this.presentationData && this.presentationData.length > 0) {
+      const slide = this.presentationData.find((s: any) => s.order_number === index);
+      if (slide) {
+        return {
+          title: slide.title,
+          content: slide.content ? JSON.parse(slide.content) : [],
+          bullets: slide.bullets ? JSON.parse(slide.bullets) : [],
+          gif: slide.gif && slide.gif !== 'null' ? slide.gif : null,
+          isBioSlide: slide.is_bio_slide === 1,
+          slideType: slide.slide_type,
+          pollQuestion: slide.poll_question,
+          pollOptions: slide.poll_options ? JSON.parse(slide.poll_options) : null
+        };
+      }
+    }
+    
+    // Fallback to hardcoded data
     const slideData = [
       {
         title: 'Welcome to the Edge! ⚡',
@@ -392,111 +662,113 @@ export class SlideRoom {
         bullets: []
       },
       {
-        title: 'Workers: Baristas Everywhere ⚡',
-        content: ['Tiny, serverless functions that run everywhere.'],
+        title: "Workers: Your Monolith's Best Friend ⚡",
+        content: ['Offload heavy lifting without rewriting everything'],
         bullets: [
-          'Cold starts? Basically non-existent',
-          'No servers to manage - focus on code',
-          'Runs within 50ms of your users'
+          '🎯 Deploy API endpoints in 5 seconds, globally',
+          '💡 0ms cold starts - faster than Lambda\'s 100-1000ms',
+          '🔥 Handle 10 million requests for ~$5',
+          '✨ Perfect for: auth middleware, image optimization, API rate limiting'
         ]
       },
       {
-        title: 'Durable Objects: Perfect Memory 🎯',
-        content: ['Remembers everything across the globe.'],
+        title: 'Durable Objects: Stateful Magic 🎯',
+        content: ['Single-threaded JavaScript with guaranteed consistency'],
         bullets: [
-          'Single source of truth',
-          'WebSocket coordination',
-          'State that survives',
-          'Perfect for: real-time games, collaboration'
+          '🎯 Build real-time features WITHOUT Redis/Socket.io',
+          '💡 Handles 1000+ WebSocket connections per object',
+          '🔥 Automatic regional failover with state intact',
+          '✨ This presentation runs on it - polls, votes, sync!'
         ]
       },
       {
-        title: 'D1: Your Lightweight Database 💾',
-        content: ['SQLite-compatible at the edge'],
+        title: 'D1: SQLite Goes Global 💾',
+        content: ["Your monolith's read-heavy queries, but faster"],
         bullets: [
-          'Perfect for smaller, quick queries',
-          'Read replicas globally distributed',
-          'Automatic backups'
+          '🎯 5ms read latency from anywhere on Earth',
+          '💡 Import your existing SQLite DB in one command',
+          '🔥 Free tier: 5GB storage + 5 billion reads/month',
+          '✨ Perfect for: user preferences, config, session data'
         ]
       },
       {
-        title: 'Queues: Your Traffic Manager 🚦',
-        content: ['Only lets in the right number of people'],
+        title: 'Queues: Decouple Your Monolith 🚦',
+        content: ['Process heavy tasks without blocking your main app'],
         bullets: [
-          'Smooth traffic spikes',
-          'Automatic retries',
-          'Dead letter queues',
-          'Batch processing'
+          '🎯 Process up to 100 messages/second per queue',
+          '💡 Automatic retries with exponential backoff built-in',
+          '🔥 Batch up to 100 messages - save 90% on processing',
+          '✨ Perfect for: email sending, PDF generation, webhooks'
         ]
       },
       {
-        title: 'R2: Zero Egress Storage 🗄️',
-        content: ['Your own attic - grab anything free!'],
+        title: 'R2: Escape the AWS Egress Tax 🗄️',
+        content: ['S3-compatible storage with ZERO egress fees'],
         bullets: [
-          'S3-compatible API',
-          'ZERO egress fees',
-          'Automatic replication',
-          'Perfect for: images, backups, datasets'
+          '🎯 Save 80%+ on storage costs vs S3',
+          '💡 Automatic image resizing with Workers',
+          '🔥 10GB free storage + 10M requests/month',
+          '✨ One company saved $370k/year just by switching!'
         ]
       },
       {
-        title: 'AI: Your Smart Neighbor 🤖',
-        content: ['Smart neighbor next door - Instant feedback!'],
+        title: 'AI: No GPU Required 🤖',
+        content: ['Add AI features without infrastructure headaches'],
         bullets: [
-          'Run inference close to users',
-          'Low latency responses',
-          'Multiple model support',
-          'Pay per inference'
+          '🎯 Run Llama, Mistral, Stable Diffusion at the edge',
+          '💡 50ms inference latency globally',
+          '🔥 $0.01 per 1000 neurons - 10x cheaper than OpenAI',
+          '✨ Perfect for: content moderation, personalization, search'
         ]
       },
       {
-        title: 'Workflows: Your Process Orchestra 🎭',
-        content: ['Orchestrate complex, long-running processes with ease'],
+        title: 'Workflows: Background Jobs That Actually Work 🎭',
+        content: ['Replace your job queues with durable workflows'],
         bullets: [
-          'Built-in retries and error handling',
-          'Durable execution across restarts',
-          'Human-in-the-loop approvals',
-          'Perfect for: ETL, batch jobs, multi-step APIs'
+          '🎯 Sleep for days/months without consuming resources',
+          '💡 Automatic replay from any step on failure',
+          '🔥 Built-in observability - see every step in UI',
+          '✨ Perfect for: payment processing, data pipelines, onboarding'
         ]
       },
       {
-        title: 'Containers: Bring Your Own Runtime 📦',
-        content: ['Run any Docker container at the edge'],
+        title: 'Containers: Your Monolith, But Global 📦',
+        content: ['Run your existing Docker containers at the edge'],
         bullets: [
-          'Full compatibility with existing containers',
-          'GPU support for ML workloads',
-          'Seamless integration with Workers',
-          'Perfect for: legacy apps, custom runtimes'
+          '🎯 Deploy your monolith to 300+ cities instantly',
+          '💡 GPU support - run AI models at the edge',
+          '🔥 Mix Workers + Containers in same request',
+          '✨ Perfect for: Python/Ruby apps, ML models, legacy code'
         ]
       },
       {
-        title: 'Load Balancers: Traffic Control Tower 🎮',
-        content: ['Intelligent traffic distribution across the globe'],
+        title: 'Load Balancers: Smart Traffic Routing 🎮',
+        content: ['Route users to the best server automatically'],
         bullets: [
-          'Health checks and failover',
-          'Geographic steering',
-          'Session affinity',
-          'Perfect for: multi-region apps, zero downtime'
+          '🎯 Instant failover - 0 second downtime',
+          '💡 Geo-steering: EU users → EU servers automatically',
+          '🔥 Health checks every 15 seconds from 300+ locations',
+          '✨ Perfect for: blue-green deployments, A/B testing'
         ]
       },
       {
-        title: 'AI Models: Your Brain Trust 🧠',
-        content: ['Pre-trained models ready to use instantly'],
+        title: 'AI Models: OpenAI Alternative at the Edge 🧠',
+        content: ['Run LLMs without API keys or rate limits'],
         bullets: [
-          'LLMs, image generation, embeddings',
-          'No infrastructure to manage',
-          'Pay per inference, not idle time',
-          'Perfect for: chat, vision, translation'
+          '🎯 Llama 3.1 70B, Mistral, and more built-in',
+          '💡 Generate images in <2 seconds globally',
+          '🔥 Embeddings API: 50M tokens for $1',
+          '✨ No cold starts - models always warm'
         ]
       },
       {
-        title: 'AI Agents: Your Digital Workforce 🤖',
-        content: ['Autonomous agents that think and act'],
+        title: 'AI Agents: Autonomous Workers 🤖',
+        content: ['Build agents that interact with your APIs'],
         bullets: [
-          'Tool calling and function execution',
-          'Multi-step reasoning',
-          'Context-aware responses',
-          'Perfect for: automation, support, analysis'
+          '🎯 Connect to your monolith APIs via tool calling',
+          '💡 Built-in memory and context management',
+          '🔥 Chain multiple models for complex tasks',
+          '✨ Perfect for: customer support, data extraction, testing'
         ]
       },
       {
@@ -636,7 +908,7 @@ export class SlideRoom {
     if (this.pollTimer) clearTimeout(this.pollTimer);
     this.pollTimer = setTimeout(() => {
       this.endPoll();
-    }, (pollData.duration || 30) * 1000);
+    }, (pollData.duration || 20) * 1000);
     
     // Also set up interval to broadcast updates
     const updateInterval = setInterval(() => {

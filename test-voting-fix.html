@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Poll Voting Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 4px;
+            border: 1px solid #333;
+        }
+        .start-poll { background: #4CAF50; color: white; }
+        .vote-btn { background: #2196F3; color: white; }
+        .results {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+        .vote-bar {
+            height: 30px;
+            background: #4CAF50;
+            margin: 5px 0;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>Poll Voting Test - Room: 849134</h1>
+    
+    <div class="section">
+        <h2>Presenter Controls</h2>
+        <button class="start-poll" onclick="startPoll()">Start New Poll</button>
+    </div>
+    
+    <div class="section">
+        <h2>Voter 1</h2>
+        <div id="voter1-options"></div>
+    </div>
+    
+    <div class="section">
+        <h2>Voter 2</h2>
+        <div id="voter2-options"></div>
+    </div>
+    
+    <div class="section">
+        <h2>Voter 3</h2>
+        <div id="voter3-options"></div>
+    </div>
+    
+    <div class="section">
+        <h2>Live Results</h2>
+        <div id="results" class="results">No active poll</div>
+    </div>
+    
+    <script>
+        const roomId = '849134';
+        let currentPollId = null;
+        let pollOptions = [];
+        let ws = null;
+        
+        // Connect to WebSocket
+        function connectWebSocket() {
+            ws = new WebSocket(`ws://localhost:8787/ws/slides/${roomId}`);
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'pollStart') {
+                    currentPollId = data.data.pollId;
+                    pollOptions = data.data.options;
+                    showVotingOptions();
+                    updateResults({});
+                }
+                
+                if (data.type === 'pollUpdate') {
+                    updateResults(data.data.votes);
+                }
+                
+                if (data.type === 'pollEnd') {
+                    currentPollId = null;
+                    document.getElementById('results').innerHTML = `
+                        <h3>Poll Ended - Winner: ${data.data.winner}</h3>
+                        <div>Final votes: ${JSON.stringify(data.data.votes)}</div>
+                    `;
+                }
+            };
+            
+            ws.onopen = () => {
+                console.log('Connected to room:', roomId);
+                ws.send(JSON.stringify({ type: 'join', roomId }));
+            };
+        }
+        
+        async function startPoll() {
+            // Get poll options first
+            const optionsResp = await fetch(`/api/poll-options?roomId=${roomId}`);
+            const optionsData = await optionsResp.json();
+            
+            if (optionsData.options && optionsData.options.length > 0) {
+                // Start poll through presenter interface
+                const pollId = 'poll-' + Date.now();
+                currentPollId = pollId;
+                pollOptions = optionsData.options;
+                
+                // Broadcast poll start through WebSocket
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'startPoll',
+                        data: {
+                            pollId: pollId,
+                            question: optionsData.question,
+                            options: optionsData.options,
+                            duration: 20,
+                            isReset: false
+                        }
+                    }));
+                }
+                
+                showVotingOptions();
+                updateResults({});
+            }
+        }
+        
+        function showVotingOptions() {
+            if (!pollOptions || pollOptions.length === 0) return;
+            
+            // Show options for each voter
+            ['voter1', 'voter2', 'voter3'].forEach(voterId => {
+                const container = document.getElementById(`${voterId}-options`);
+                container.innerHTML = pollOptions.map(opt => 
+                    `<button class="vote-btn" onclick="vote('${voterId}', '${opt.id}')">${opt.label}</button>`
+                ).join('');
+            });
+        }
+        
+        async function vote(voterId, optionId) {
+            if (!currentPollId) {
+                alert('No active poll');
+                return;
+            }
+            
+            // Generate unique user ID for this voter
+            const userId = `test-${voterId}-${Date.now()}`;
+            
+            const response = await fetch('/api/vote', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    pollId: currentPollId,
+                    optionId: optionId,
+                    userId: userId,
+                    roomId: roomId
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.text();
+                console.error('Vote failed:', error);
+            } else {
+                console.log(`${voterId} voted for ${optionId}`);
+            }
+        }
+        
+        function updateResults(votes) {
+            const resultsDiv = document.getElementById('results');
+            
+            if (!pollOptions || pollOptions.length === 0) {
+                resultsDiv.innerHTML = 'No active poll';
+                return;
+            }
+            
+            let totalVotes = 0;
+            pollOptions.forEach(opt => {
+                totalVotes += votes[opt.id] || 0;
+            });
+            
+            resultsDiv.innerHTML = '<h3>Current Votes</h3>' + 
+                pollOptions.map(opt => {
+                    const count = votes[opt.id] || 0;
+                    const percentage = totalVotes > 0 ? (count / totalVotes * 100).toFixed(0) : 0;
+                    return `
+                        <div>
+                            <strong>${opt.label}:</strong> ${count} votes
+                            <div class="vote-bar" style="width: ${percentage}%">${percentage}%</div>
+                        </div>
+                    `;
+                }).join('') + 
+                `<div style="margin-top: 10px"><strong>Total votes: ${totalVotes}</strong></div>`;
+        }
+        
+        // Initialize
+        connectWebSocket();
+    </script>
+</body>
+</html>
