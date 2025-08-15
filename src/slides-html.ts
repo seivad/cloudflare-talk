@@ -772,6 +772,18 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                         handlePollEnd(data.data);
                     }
                     break;
+                    
+                case 'prizeWinner':
+                    // Display prize winner
+                    if (data.data && data.data.winner) {
+                        showPrizeWinner(data.data.winner);
+                    }
+                    break;
+                    
+                case 'allWinnersSelected':
+                    // All participants have won
+                    showAllWinnersMessage(data.data);
+                    break;
             }
         }
 
@@ -952,6 +964,11 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                     case 'P':
                         e.preventDefault();
                         startPoll();
+                        break;
+                    case 'w':
+                    case 'W':
+                        e.preventDefault();
+                        pickPrizeWinner();
                         break;
                     case '1':
                         e.preventDefault();
@@ -1279,6 +1296,116 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                     strategy: 'random'
                 }));
             }
+        }
+        
+        function pickPrizeWinner() {
+            console.log('🎁 Picking a prize winner from participants...');
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'pickPrizeWinner'
+                }));
+            }
+        }
+        
+        // Confetti removed - using emojis for celebration instead
+        
+        function showAllWinnersMessage(data) {
+            console.log('🎊 All participants have won prizes!');
+            
+            // Get or create overlay
+            let overlay = document.getElementById('pollOverlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'pollOverlay';
+                overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: none; z-index: 9999;';
+                overlay.className = 'poll-overlay';
+                document.body.appendChild(overlay);
+            }
+            overlay.innerHTML = '<div style="text-align: center; padding: 3rem;">' +
+                '<div style="font-size: 5rem; margin-bottom: 2rem;">🎊🎉🎊</div>' +
+                '<h1 style="font-size: 3rem; color: white; margin-bottom: 2rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">All Participants Have Won!</h1>' +
+                '<div style="font-size: 2rem; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">Everyone is a winner today! 🏆</div>' +
+                '<div style="margin-top: 3rem; font-size: 1.2rem; color: white;">Press ESC to continue...</div>' +
+                '</div>';
+            overlay.style.display = 'flex';
+            overlay.style.alignItems = 'center';
+            overlay.style.justifyContent = 'center';
+            overlay.style.background = 'linear-gradient(135deg, rgba(102,126,234,0.95) 0%, rgba(118,75,162,0.95) 100%)';
+            
+            // Removed confetti - emoji celebration is enough
+            
+            // Handle ESC key
+            const hideMessage = (e) => {
+                if (e && e.key && e.key !== 'Escape' && e.key !== 'Esc') {
+                    return; // Only close on ESC
+                }
+                overlay.style.display = 'none';
+                overlay.innerHTML = ''; // Clear content
+                document.removeEventListener('keydown', hideMessage, true);
+            };
+            
+            // Use capture phase
+            document.addEventListener('keydown', hideMessage, true);
+            
+            // Auto-hide after 10 seconds
+            setTimeout(() => hideMessage(), 10000);
+        }
+        
+        function showPrizeWinner(winner) {
+            console.log('🎉 Prize winner:', winner.fullName);
+            
+            // Get or create overlay
+            let overlay = document.getElementById('pollOverlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'pollOverlay';
+                overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: none; z-index: 9999;';
+                overlay.className = 'poll-overlay';
+                document.body.appendChild(overlay);
+            }
+            overlay.innerHTML = '<div style="text-align: center; padding: 3rem;">' +
+                '<div style="font-size: 5rem; margin-bottom: 1rem; animation: bounce 1s infinite;">🏆</div>' +
+                '<h1 style="font-size: 4rem; color: #FFD700; margin-bottom: 2rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">WINNER!</h1>' +
+                '<div style="font-size: 3.5rem; color: white; margin-bottom: 3rem; font-weight: bold;">' + winner.fullName + '</div>' +
+                '<div style="font-size: 2rem; color: #FFD700;">Congratulations! 🎉</div>' +
+                '<div style="margin-top: 3rem; font-size: 1.2rem; color: #ccc;">Press ESC to close • Press W to pick another winner</div>' +
+                '</div>';
+            overlay.style.display = 'flex';
+            overlay.style.alignItems = 'center';
+            overlay.style.justifyContent = 'center';
+            overlay.style.background = 'linear-gradient(135deg, rgba(102,126,234,0.95) 0%, rgba(118,75,162,0.95) 100%)';
+            
+            // Add bounce animation for trophy
+            if (!document.getElementById('bounceStyle')) {
+                const style = document.createElement('style');
+                style.id = 'bounceStyle';
+                style.textContent = '@keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }';
+                document.head.appendChild(style);
+            }
+            
+            // Removed confetti - emojis and trophy animation are enough
+            
+            // Handle key press - use stopPropagation to prevent conflicts
+            const handleKeyPress = (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                
+                if (e.key === 'Escape' || e.key === 'Esc') {
+                    // Close overlay and return to slides
+                    overlay.style.display = 'none';
+                    overlay.innerHTML = ''; // Clear content
+                    document.removeEventListener('keydown', handleKeyPress, true);
+                } else if (e.key.toLowerCase() === 'w') {
+                    // Pick another winner
+                    overlay.style.display = 'none';
+                    overlay.innerHTML = ''; // Clear content
+                    document.removeEventListener('keydown', handleKeyPress, true);
+                    setTimeout(() => pickPrizeWinner(), 100); // Small delay to ensure clean state
+                }
+            };
+            
+            // Use capture phase to intercept before other handlers
+            document.addEventListener('keydown', handleKeyPress, true);
         }
 
         function simulatePoll() {

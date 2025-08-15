@@ -199,6 +199,83 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
         }
         .hidden { display: none !important; }
         
+        /* Name modal styles */
+        .name-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            backdrop-filter: blur(10px);
+        }
+        .name-modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 2.5rem;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        .name-modal h2 {
+            color: #333;
+            margin-bottom: 1rem;
+            font-size: 1.8rem;
+            text-align: center;
+        }
+        .name-modal p {
+            color: #666;
+            margin-bottom: 2rem;
+            text-align: center;
+            font-size: 1rem;
+        }
+        .name-input-group {
+            margin-bottom: 1.5rem;
+        }
+        .name-input-group label {
+            display: block;
+            color: #555;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+        .name-input-group input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        .name-input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .name-submit-btn {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .name-submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        .name-submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
         /* Poll view styles */
         .poll-view {
             position: fixed;
@@ -305,6 +382,23 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
     </style>
 </head>
 <body class="audience">
+    <!-- Name collection modal -->
+    <div id="nameModal" class="name-modal">
+        <div class="name-modal-content">
+            <h2>Welcome to the Tech Talk! 👋</h2>
+            <p>Please enter your name to join the session</p>
+            <div class="name-input-group">
+                <label for="firstName">First Name *</label>
+                <input type="text" id="firstName" placeholder="Enter your first name" required>
+            </div>
+            <div class="name-input-group">
+                <label for="lastName">Last Name (or initial)</label>
+                <input type="text" id="lastName" placeholder="Enter last name or initial">
+            </div>
+            <button id="nameSubmitBtn" class="name-submit-btn">Join Session</button>
+        </div>
+    </div>
+    
     <div id="app" class="app-container">
         <div id="mainView" class="main-view">
             <div id="slideMirror" class="slide-mirror">
@@ -347,6 +441,72 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
         const roomId = '{{ROOM_ID}}';
         console.log('Audience view loaded for room:', roomId);
         
+        // Get stored participant info
+        let participantInfo = localStorage.getItem('participantInfo');
+        if (participantInfo) {
+            participantInfo = JSON.parse(participantInfo);
+        }
+        
+        // Show name modal if not already registered
+        const nameModal = document.getElementById('nameModal');
+        const firstNameInput = document.getElementById('firstName');
+        const lastNameInput = document.getElementById('lastName');
+        const nameSubmitBtn = document.getElementById('nameSubmitBtn');
+        
+        if (!participantInfo || !participantInfo.firstName) {
+            // Show modal
+            nameModal.style.display = 'flex';
+        } else {
+            // Hide modal if already registered
+            nameModal.style.display = 'none';
+        }
+        
+        // Handle name submission
+        nameSubmitBtn.addEventListener('click', () => {
+            const firstName = firstNameInput.value.trim();
+            const lastName = lastNameInput.value.trim();
+            
+            if (!firstName) {
+                firstNameInput.style.borderColor = '#ff5252';
+                firstNameInput.focus();
+                return;
+            }
+            
+            // Store participant info
+            participantInfo = {
+                firstName,
+                lastName: lastName || '',
+                joinedAt: Date.now()
+            };
+            localStorage.setItem('participantInfo', JSON.stringify(participantInfo));
+            
+            // Hide modal
+            nameModal.style.display = 'none';
+            
+            // Continue with WebSocket connection
+            console.log('Participant registered:', participantInfo);
+            
+            // Start WebSocket connection after name collection
+            if (!websocket) {
+                websocket = connectWebSocket();
+            }
+        });
+        
+        // Allow Enter key to submit
+        firstNameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                if (firstNameInput.value.trim()) {
+                    lastNameInput.focus();
+                }
+            }
+        });
+        
+        lastNameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                nameSubmitBtn.click();
+            }
+        });
+        
         // Validate room ID and redirect if needed
         if (roomId === '{{ROOM_ID}}' || !roomId) {
             // No room ID provided, redirect to session entry page
@@ -363,6 +523,9 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
         let reconnectAttempts = 0;
         let heartbeatInterval = null;
         let missedPongs = 0;
+        let lastReceivedMessageTime = Date.now();
+        let connectionCheckInterval = null;
+        let waitingForState = false;
         
         // Visual connection status - only show when disconnected or connecting
         function updateConnectionStatus(status) {
@@ -429,10 +592,35 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                 console.log('✅ Audience connected to room:', roomId);
                 reconnectAttempts = 0;
                 missedPongs = 0;
+                lastReceivedMessageTime = Date.now();
                 updateConnectionStatus('connected');
                 
-                // Send initial join message
-                ws.send(JSON.stringify({ type: 'join', roomId: roomId }));
+                // Clear any existing intervals
+                if (heartbeatInterval) {
+                    clearInterval(heartbeatInterval);
+                }
+                if (connectionCheckInterval) {
+                    clearInterval(connectionCheckInterval);
+                }
+                
+                // Send initial join message with participant info to get current state
+                waitingForState = true;
+                const joinMessage = {
+                    type: 'join',
+                    roomId: roomId,
+                    participant: participantInfo || { firstName: 'Anonymous', lastName: '' }
+                };
+                ws.send(JSON.stringify(joinMessage));
+                
+                // Set a timeout to check if we received state
+                setTimeout(() => {
+                    if (waitingForState) {
+                        console.log('Did not receive state after join, requesting again...');
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify(joinMessage));
+                        }
+                    }
+                }, 3000);
                 
                 // Setup heartbeat with pong monitoring
                 heartbeatInterval = setInterval(() => {
@@ -448,14 +636,26 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                         clearInterval(heartbeatInterval);
                     }
                 }, 10000); // Every 10 seconds instead of 30
+                
+                // Setup connection health check
+                connectionCheckInterval = setInterval(() => {
+                    const timeSinceLastMessage = Date.now() - lastReceivedMessageTime;
+                    // If we haven't received any message in 30 seconds, force reconnect
+                    if (timeSinceLastMessage > 30000 && ws && ws.readyState === WebSocket.OPEN) {
+                        console.log('No messages received for 30 seconds, forcing reconnection...');
+                        ws.close();
+                    }
+                }, 10000); // Check every 10 seconds
             };
             
             ws.onmessage = (event) => {
+                lastReceivedMessageTime = Date.now();
                 const data = JSON.parse(event.data);
                 
                 // Reset missed pongs on any message
                 if (data.type === 'pong') {
                     missedPongs = 0;
+                    console.log('Received pong, connection healthy');
                     return;
                 }
                 
@@ -463,6 +663,10 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                 if (data.type === 'participantUpdate') {
                     document.getElementById('participantCount').textContent = data.data.count;
                 } else if (data.type === 'state') {
+                    // Mark that we received state
+                    waitingForState = false;
+                    console.log('Received state update, connection fully restored');
+                    
                     // Initial state with participant count and current slide
                     if (data.data.participantCount !== undefined) {
                         document.getElementById('participantCount').textContent = data.data.participantCount;
@@ -542,7 +746,16 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                 } else if (data.type === 'pollEnd') {
                     // Poll ended
                     endPoll(data.data);
+                } else if (data.type === 'prizeWinner') {
+                    // Show prize winner celebration
+                    if (data.data && data.data.winner) {
+                        showPrizeWinnerCelebration(data.data.winner);
+                    }
+                } else if (data.type === 'allWinnersSelected') {
+                    // Show all winners message
+                    showAllWinnersMessage(data.data);
                 } else if (data.type === 'slideChanged') {
+                    console.log('Received slideChanged event:', data.data.index, data.data.title);
                     // Update current slide info
                     if (data.data) {
                         // Update title
@@ -620,10 +833,14 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                 ws = null;
                 updateConnectionStatus('disconnected');
                 
-                // Clear heartbeat
+                // Clear all intervals
                 if (heartbeatInterval) {
                     clearInterval(heartbeatInterval);
                     heartbeatInterval = null;
+                }
+                if (connectionCheckInterval) {
+                    clearInterval(connectionCheckInterval);
+                    connectionCheckInterval = null;
                 }
                 
                 // Schedule reconnection
@@ -651,8 +868,11 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
             }, reconnectDelay);
         }
         
-        // Connect on load
-        let websocket = connectWebSocket();
+        // Connect on load only if already registered
+        let websocket = null;
+        if (participantInfo && participantInfo.firstName) {
+            websocket = connectWebSocket();
+        }
         
         // Add participant to the session
         async function registerParticipant() {
@@ -686,11 +906,21 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
             }
         });
         
-        // Periodic connection check
+        // Periodic connection check and health verification
         setInterval(() => {
             if (!ws || ws.readyState !== WebSocket.OPEN) {
                 console.log('Periodic check: Connection lost, reconnecting...');
                 connectWebSocket();
+            } else {
+                // Check if connection is truly healthy
+                const timeSinceLastMessage = Date.now() - lastReceivedMessageTime;
+                if (timeSinceLastMessage > 60000) { // 1 minute without any messages
+                    console.log('Connection appears stale (no messages for 60s), forcing reconnect...');
+                    if (ws) {
+                        ws.close();
+                    }
+                    connectWebSocket();
+                }
             }
         }, 5000);
         
@@ -799,6 +1029,51 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
             return;
         }
         
+        function showAllWinnersMessage(data) {
+            console.log('🎊 All participants have won!');
+            
+            const celebrationDiv = document.createElement('div');
+            celebrationDiv.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, rgba(102,126,234,0.95) 0%, rgba(118,75,162,0.95) 100%); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+            
+            celebrationDiv.innerHTML = '<div style="text-align: center; padding: 2rem;"><div style="font-size: 4rem; margin-bottom: 2rem;">🎊🎉🏆🎉🎊</div><h1 style="font-size: 2.5rem; color: white; margin-bottom: 1rem;">Everyone Has Won!</h1><div style="font-size: 1.5rem; color: white;">Everyone is a winner today!</div><div style="font-size: 1.2rem; color: white; margin-top: 2rem;">Congratulations to everyone! 👏</div></div>';
+            
+            document.body.appendChild(celebrationDiv);
+            
+            // Removed confetti - emojis are enough
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                celebrationDiv.remove();
+            }, 5000);
+        }
+        
+        function showPrizeWinnerCelebration(winner) {
+            console.log('🎉 Prize winner announced:', winner.fullName);
+            
+            // Check if this is the winner
+            const isWinner = participantInfo && 
+                participantInfo.firstName === winner.firstName &&
+                (!winner.lastName || participantInfo.lastName.startsWith(winner.lastName.charAt(0)));
+            
+            // Create celebration overlay
+            const celebrationDiv = document.createElement('div');
+            celebrationDiv.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.9); display: flex; align-items: center; justify-content: center; z-index: 10000; backdrop-filter: blur(10px);';
+            
+            if (isWinner) {
+                celebrationDiv.innerHTML = '<div style="text-align: center; padding: 2rem;"><div style="font-size: 5rem; margin-bottom: 1rem;">🎉🏆🎉</div><h1 style="font-size: 3rem; color: #FFD700; margin-bottom: 2rem;">YOU WON!</h1><div style="font-size: 1.5rem; color: white;">Congratulations! You\\'ve won a prize!</div></div>';
+                // Removed confetti - emojis are enough
+            } else {
+                celebrationDiv.innerHTML = '<div style="text-align: center; padding: 2rem;"><div style="font-size: 3rem; margin-bottom: 1rem;">🎊</div><h2 style="font-size: 2rem; color: white; margin-bottom: 1rem;">And the winner is...</h2><div style="font-size: 2.5rem; color: #FFD700; margin-bottom: 2rem;">' + winner.fullName + '</div><div style="font-size: 1rem; color: #ccc;">Congratulations to the winner! 👏</div></div>';
+            }
+            
+            document.body.appendChild(celebrationDiv);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                celebrationDiv.remove();
+            }, 5000);
+        }
+        
         function endPoll(data) {
             clearInterval(pollTimer);
             
@@ -820,11 +1095,7 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                     document.getElementById('voteStatus').style.fontSize = '1.2rem';
                 }
                 
-                // Show confetti if voted for winner
-                const votedOption = document.querySelector('.poll-option.voted');
-                if (votedOption && votedOption.dataset.optionId === data.winner) {
-                    createConfetti(document.getElementById('pollView'));
-                }
+                // Removed confetti effect - emojis are enough for celebration
             }
             
             // Hide poll after delay - don't update title here as slideChanged will handle it

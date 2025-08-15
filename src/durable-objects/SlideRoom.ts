@@ -27,12 +27,16 @@ export class SlideRoom {
   private pollTimer: any;
   private sql: any; // Durable Object SQL storage
   private presentationData: any[] = [];
+  private participantMap: Map<WebSocket, any>;
+  private prizeWinners: Set<string>; // Track winner IDs to prevent duplicate wins
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
     this.clients = new Set();
     this.sql = state.storage.sql;
+    this.participantMap = new Map();
+    this.prizeWinners = new Set();
     this.slideState = {
       currentSlideIndex: 0,
       currentNodeId: 'start',
@@ -43,6 +47,8 @@ export class SlideRoom {
     
     // Initialize SQL tables on construction
     this.initializeSQLTables();
+    // Load prize winners from storage
+    this.loadPrizeWinners();
   }
 
   private async initializeSQLTables() {
@@ -53,14 +59,16 @@ export class SlideRoom {
         return;
       }
       
-      // Create participants table
+      // Create participants table with name fields
       await this.sql.exec(`
         CREATE TABLE IF NOT EXISTS participants (
           id TEXT PRIMARY KEY,
           user_id TEXT NOT NULL,
           joined_at INTEGER NOT NULL,
           last_seen INTEGER NOT NULL,
-          is_presenter INTEGER DEFAULT 0
+          is_presenter INTEGER DEFAULT 0,
+          first_name TEXT,
+          last_name TEXT
         )
       `);
       
@@ -96,6 +104,60 @@ export class SlideRoom {
     }
   }
 
+  private async loadPrizeWinners() {
+    try {
+      const winners = await this.state.storage.get('prizeWinners');
+      if (winners) {
+        this.prizeWinners = new Set(winners as string[]);
+        console.log(`Loaded ${this.prizeWinners.size} previous winners`);
+      }
+    } catch (error) {
+      console.error('Failed to load prize winners:', error);
+    }
+  }
+  
+  private async savePrizeWinners() {
+    try {
+      await this.state.storage.put('prizeWinners', Array.from(this.prizeWinners));
+    } catch (error) {
+      console.error('Failed to save prize winners:', error);
+    }
+  }
+  
+  private generateParticipantId(): string {
+    return `participant_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+  
+  private async getActiveParticipants(excludeWinners = false) {
+    let participants = [];
+    
+    if (!this.sql || typeof this.sql.exec !== 'function') {
+      // Fall back to in-memory participant map
+      participants = Array.from(this.participantMap.values());
+    } else {
+      try {
+        const result = await this.sql.exec(
+          `SELECT id, first_name, last_name, joined_at FROM participants 
+           WHERE last_seen > ? 
+           ORDER BY joined_at DESC`,
+          Date.now() - 3600000 // Active in last hour
+        );
+        participants = result.results || [];
+      } catch (error) {
+        console.error('Failed to get participants from SQL:', error);
+        participants = Array.from(this.participantMap.values());
+      }
+    }
+    
+    // Filter out winners if requested
+    if (excludeWinners && this.prizeWinners.size > 0) {
+      participants = participants.filter(p => !this.prizeWinners.has(p.id));
+      console.log(`Filtered out ${this.prizeWinners.size} previous winners, ${participants.length} eligible participants remaining`);
+    }
+    
+    return participants;
+  }
+  
   private async loadState() {
     const storedState = await this.state.storage.get('slideState');
     if (storedState) {
@@ -224,6 +286,8 @@ export class SlideRoom {
         return this.handleGetPollOptions();
       case '/internal/add-participant':
         return this.handleAddParticipant(request);
+      case '/internal/pick-prize-winner':
+        return this.handlePickPrizeWinner();
       default:
         return new Response('Not found', { status: 404 });
     }
@@ -244,6 +308,9 @@ export class SlideRoom {
         case 'pickWinner':
           await this.forcePickWinner(data.optionId, data.strategy);
           break;
+        case 'pickPrizeWinner':
+          await this.pickAndBroadcastPrizeWinner();
+          break;
         case 'ping':
           // Respond to ping with pong to keep connection alive
           try {
@@ -254,15 +321,72 @@ export class SlideRoom {
           break;
         case 'join':
           // Re-send current state when client rejoins
-          console.log('Client joined room:', data.roomId);
-          const currentSlide = this.getSlideData(this.slideState.currentSlideIndex);
-          ws.send(JSON.stringify({
-            type: 'state',
-            data: {
-              ...this.slideState,
-              currentSlide
+          console.log('Client joined/rejoined room:', data.roomId);
+          
+          // Store participant info if provided
+          if (data.participant) {
+            const participantId = this.generateParticipantId();
+            const participant = {
+              id: participantId,
+              firstName: data.participant.firstName || 'Anonymous',
+              lastName: data.participant.lastName || '',
+              joinedAt: Date.now(),
+              wsId: ws
+            };
+            
+            // Store in SQL if available
+            if (this.sql && typeof this.sql.exec === 'function') {
+              try {
+                await this.sql.exec(
+                  `INSERT OR REPLACE INTO participants (id, user_id, joined_at, last_seen, is_presenter, first_name, last_name) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                  participantId,
+                  participantId,
+                  Date.now(),
+                  Date.now(),
+                  0,
+                  participant.firstName,
+                  participant.lastName
+                );
+                console.log('Stored participant:', participant.firstName, participant.lastName);
+              } catch (error) {
+                console.error('Failed to store participant in SQL:', error);
+              }
             }
-          }));
+            
+            // Store WebSocket to participant mapping
+            if (!this.participantMap) {
+              this.participantMap = new Map();
+            }
+            this.participantMap.set(ws, participant);
+          }
+          
+          const currentSlide = this.getSlideData(this.slideState.currentSlideIndex);
+          
+          // Send comprehensive state update
+          try {
+            ws.send(JSON.stringify({
+              type: 'state',
+              data: {
+                ...this.slideState,
+                currentSlide,
+                visitedSlides: Array.from(this.slideState.visitedSlides),
+                timestamp: Date.now()
+              }
+            }));
+            console.log('Sent state to rejoined client');
+            
+            // If there's an active poll, send that too
+            if (this.activePoll) {
+              ws.send(JSON.stringify({
+                type: 'pollStart',
+                data: this.activePoll
+              }));
+              console.log('Sent active poll to rejoined client');
+            }
+          } catch (error) {
+            console.error('Failed to send state to rejoined client:', error);
+          }
           break;
       }
     } catch (error) {
@@ -520,6 +644,118 @@ export class SlideRoom {
     });
 
     return new Response(JSON.stringify({ success: true }));
+  }
+  
+  private async handlePickPrizeWinner(): Promise<Response> {
+    const result = await this.pickRandomParticipant();
+    
+    if (!result) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'No participants available' 
+      }), { status: 404 });
+    }
+    
+    // Check if this is an error response
+    if (result.error) {
+      // Broadcast the "all won" message
+      this.broadcast({
+        type: 'allWinnersSelected',
+        data: {
+          message: result.message,
+          totalWinners: this.prizeWinners.size
+        }
+      });
+      
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: result.error,
+        message: result.message 
+      }), { status: 200 });
+    }
+    
+    const winner = result;
+    
+    // Broadcast winner to all clients
+    this.broadcast({
+      type: 'prizeWinner',
+      data: {
+        winner: {
+          firstName: winner.firstName || winner.first_name,
+          lastName: winner.lastName || winner.last_name,
+          fullName: `${winner.firstName || winner.first_name} ${(winner.lastName || winner.last_name || '').charAt(0)}${(winner.lastName || winner.last_name) ? '.' : ''}`
+        },
+        timestamp: Date.now(),
+        totalWinners: this.prizeWinners.size
+      }
+    });
+    
+    return new Response(JSON.stringify({ 
+      success: true, 
+      winner,
+      totalWinners: this.prizeWinners.size
+    }));
+  }
+  
+  private async pickAndBroadcastPrizeWinner() {
+    const result = await this.pickRandomParticipant();
+    
+    if (result && !result.error) {
+      const winner = result;
+      this.broadcast({
+        type: 'prizeWinner',
+        data: {
+          winner: {
+            firstName: winner.firstName || winner.first_name,
+            lastName: winner.lastName || winner.last_name,
+            fullName: `${winner.firstName || winner.first_name} ${(winner.lastName || winner.last_name || '').charAt(0)}${(winner.lastName || winner.last_name) ? '.' : ''}`
+          },
+          timestamp: Date.now(),
+          totalWinners: this.prizeWinners.size
+        }
+      });
+    } else if (result && result.error === 'all_won') {
+      this.broadcast({
+        type: 'allWinnersSelected',
+        data: {
+          message: result.message,
+          totalWinners: this.prizeWinners.size
+        }
+      });
+    }
+  }
+  
+  private async pickRandomParticipant() {
+    // Get participants excluding previous winners
+    const participants = await this.getActiveParticipants(true);
+    
+    if (participants.length === 0) {
+      // Check if all participants have won
+      const allParticipants = await this.getActiveParticipants(false);
+      if (allParticipants.length > 0 && this.prizeWinners.size > 0) {
+        console.log('All participants have already won prizes!');
+        return { 
+          error: 'all_won', 
+          message: 'All participants have already won prizes!' 
+        };
+      } else {
+        console.log('No participants available for prize selection');
+        return null;
+      }
+    }
+    
+    // Pick a random participant
+    const randomIndex = Math.floor(Math.random() * participants.length);
+    const winner = participants[randomIndex];
+    
+    // Add winner to the set and save
+    this.prizeWinners.add(winner.id);
+    await this.savePrizeWinners();
+    
+    console.log(`Prize winner selected: ${winner.firstName || winner.first_name} ${winner.lastName || winner.last_name} (ID: ${winner.id})`);
+    console.log(`Total winners so far: ${this.prizeWinners.size}`);
+    
+    return winner;
   }
 
   private async handleVote(request: Request): Promise<Response> {
