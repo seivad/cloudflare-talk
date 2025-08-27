@@ -169,6 +169,47 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
             color: #444; 
             padding: 0;
         }
+        
+        /* GIF display styles - responsive */
+        .slide-gif {
+            margin-top: 2rem;
+            text-align: center;
+            padding: 0 1rem 1rem;
+        }
+        
+        /* Mobile first - stretch to fill container on small screens */
+        .slide-gif img {
+            width: 100%;
+            height: auto;
+            min-height: 300px;
+            max-height: 400px;
+            object-fit: cover;  /* Changed from contain to cover to fill the box */
+            object-position: center;  /* Keep centered when cropping */
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* Medium screens and up (768px+) - limit width and center, switch back to contain */
+        @media (min-width: 768px) {
+            .slide-gif {
+                padding: 0 2rem 1rem;
+            }
+            .slide-gif img {
+                width: auto;
+                max-width: 600px;
+                min-height: auto;
+                max-height: 450px;
+                object-fit: contain;  /* Use contain on larger screens to show full image */
+            }
+        }
+        
+        /* Large screens (1024px+) - maintain centered with max width */
+        @media (min-width: 1024px) {
+            .slide-gif img {
+                max-width: 700px;
+                max-height: 500px;
+            }
+        }
         .app-footer {
             position: fixed;
             bottom: 0;
@@ -734,6 +775,14 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                             }
                             
                             slideBody.innerHTML = bodyHTML;
+                            
+                            // Add GIF if available - check inside currentSlide object
+                            if (data.data.currentSlide && data.data.currentSlide.gif) {
+                                const gifDiv = document.createElement('div');
+                                gifDiv.className = 'slide-gif';
+                                gifDiv.innerHTML = '<img src="' + data.data.currentSlide.gif + '" alt="Slide animation">';
+                                slideBody.appendChild(gifDiv);
+                            }
                         }
                     }
                 } else if (data.type === 'pollStart') {
@@ -818,6 +867,14 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                             }
                             
                             slideBody.innerHTML = bodyHTML;
+                            
+                            // Add GIF if available
+                            if (data.data && data.data.gif) {
+                                const gifDiv = document.createElement('div');
+                                gifDiv.className = 'slide-gif';
+                                gifDiv.innerHTML = '<img src="' + data.data.gif + '" alt="Slide animation">';
+                                slideBody.appendChild(gifDiv);
+                            }
                         }
                     }
                 }

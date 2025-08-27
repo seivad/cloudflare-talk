@@ -1,5 +1,8 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { sign, verify } from 'hono/jwt';
+import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
+import bcrypt from 'bcryptjs';
 import { SlideRoom } from './durable-objects/SlideRoom';
 import { PollRoom } from './durable-objects/PollRoom';
 import { ContainerStatus } from './durable-objects/ContainerStatus';
@@ -10,9 +13,12 @@ import { WELCOME_HTML } from './welcome-html';
 import { PRESENTER_HTML } from './presenter-html';
 import { AUDIENCE_ENTRY_HTML } from './audience-entry-html';
 import { ADMIN_HTML } from './admin-html';
+import { LOGIN_HTML } from './pages/login-html';
+import { SETUP_HTML } from './pages/setup-html';
 import { runImport } from './utils/import-json';
 import { generateSessionCode, generatePresenterToken } from './utils/session-code';
 import { PresentationQueries } from './db/queries';
+import * as db from './auth/db-utils';
 
 export { SlideRoom, PollRoom, ContainerStatus };
 
@@ -25,6 +31,7 @@ interface Env {
   ASSETS_BUCKET: R2Bucket;
   AUDIENCE_URL: string;
   ADMIN_KEY: string;
+  JWT_SECRET: string;
   __STATIC_CONTENT: any; // Wrangler's static asset binding
 }
 
@@ -33,18 +40,195 @@ const app = new Hono<{ Bindings: Env }>();
 // Enable CORS for all routes
 app.use('*', cors());
 
+// ====== PUBLIC ROUTES ======
+
 // Main route shows welcome page
 app.get('/', (c) => {
   return c.html(WELCOME_HTML);
 });
 
-// Presenter dashboard
-app.get('/presenter', async (c) => {
+// Login page
+app.get('/login', (c) => {
+  return c.html(LOGIN_HTML);
+});
+
+// Setup page for first user
+app.get('/setup', async (c) => {
+  const userCount = await db.getUserCount(c.env.DB);
+  if (userCount > 0) {
+    return c.redirect('/login');
+  }
+  return c.html(SETUP_HTML);
+});
+
+// ====== AUTHENTICATION ENDPOINTS ======
+
+// Check if users exist (for setup flow)
+app.get('/api/auth/check-users', async (c) => {
+  try {
+    const userCount = await db.getUserCount(c.env.DB);
+    return c.json({ userCount });
+  } catch (error) {
+    return c.json({ error: 'Failed to check users' }, 500);
+  }
+});
+
+// Login endpoint
+app.post('/api/auth/login', async (c) => {
+  try {
+    const { email, password } = await c.req.json();
+    
+    // Get user by email
+    const user = await db.getUserByEmail(c.env.DB, email);
+    if (!user) {
+      return c.json({ error: 'Invalid email or password' }, 401);
+    }
+    
+    // Verify password
+    const passwordValid = await bcrypt.compare(password, user.password_hash);
+    if (!passwordValid) {
+      return c.json({ error: 'Invalid email or password' }, 401);
+    }
+    
+    // Create JWT token
+    const token = await sign({
+      sub: user.id,
+      email: user.email,
+      name: user.name,
+      exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60), // 24 hours
+    }, c.env.JWT_SECRET);
+    
+    // Set cookie
+    setCookie(c, 'auth_token', token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'Lax',
+      maxAge: 86400, // 24 hours
+      path: '/'
+    });
+    
+    return c.json({ 
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    return c.json({ error: 'Login failed' }, 500);
+  }
+});
+
+// Register first user
+app.post('/api/auth/register', async (c) => {
+  try {
+    // Check if users already exist
+    const userCount = await db.getUserCount(c.env.DB);
+    if (userCount > 0) {
+      return c.json({ error: 'Users already exist. Please login.' }, 403);
+    }
+    
+    const { email, name, password } = await c.req.json();
+    
+    // Validate password
+    if (password.length < 8) {
+      return c.json({ error: 'Password must be at least 8 characters' }, 400);
+    }
+    
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+    
+    // Create user
+    const userId = await db.createUser(c.env.DB, { email, name, passwordHash });
+    
+    // Auto-login: create JWT token
+    const token = await sign({
+      sub: userId,
+      email,
+      name,
+      exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60),
+    }, c.env.JWT_SECRET);
+    
+    // Set cookie
+    setCookie(c, 'auth_token', token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'Lax',
+      maxAge: 86400,
+      path: '/'
+    });
+    
+    return c.json({ 
+      success: true,
+      user: { id: userId, email, name }
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    return c.json({ error: 'Registration failed' }, 500);
+  }
+});
+
+// Logout endpoint
+app.post('/api/auth/logout', (c) => {
+  deleteCookie(c, 'auth_token', { path: '/' });
+  return c.json({ success: true });
+});
+
+// ====== PROTECTED ROUTES MIDDLEWARE ======
+
+// Helper function to verify JWT manually for better error handling
+async function requireAuth(c: any, next: any) {
+  try {
+    const token = getCookie(c, 'auth_token');
+    
+    if (!token) {
+      // No token, redirect to login
+      return c.redirect('/login?redirect=' + c.req.path);
+    }
+    
+    // Verify the token
+    const payload = await verify(token, c.env.JWT_SECRET);
+    
+    // Check if token is expired
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+      deleteCookie(c, 'auth_token');
+      return c.redirect('/login?redirect=' + c.req.path);
+    }
+    
+    // Set the payload for use in the route
+    c.set('jwtPayload', payload);
+    
+    await next();
+  } catch (error) {
+    console.error('Auth error:', error);
+    // Invalid token, clear it and redirect to login
+    deleteCookie(c, 'auth_token');
+    return c.redirect('/login?redirect=' + c.req.path);
+  }
+}
+
+// Presenter dashboard (protected)
+app.get('/presenter', requireAuth, async (c) => {
+  const payload = c.get('jwtPayload');
   return c.html(PRESENTER_HTML);
 });
 
-// Admin dashboard
-app.get('/admin', async (c) => {
+// Slide manager (protected)
+app.get('/presenter/:presentationId/slides', requireAuth, async (c) => {
+  const { SLIDE_MANAGER_HTML } = await import('./pages/slide-manager-html');
+  return c.html(SLIDE_MANAGER_HTML);
+});
+
+// Presentation editor (protected) - redirects to slide manager for now
+app.get('/presenter/:presentationId/edit', requireAuth, async (c) => {
+  const presentationId = c.req.param('presentationId');
+  return c.redirect(`/presenter/${presentationId}/slides`);
+});
+
+// Admin dashboard (protected)
+app.get('/admin', requireAuth, async (c) => {
   return c.html(ADMIN_HTML);
 });
 
@@ -402,34 +586,25 @@ app.get('/api/poll-options', async (c) => {
   return c.json(data as any);
 });
 
-// API: Get slides for a presentation
-app.get('/api/presentations/:presentationId/slides', async (c) => {
+// API: Get slides for a presentation (protected)
+app.get('/api/presentations/:presentationId/slides', requireAuth, async (c) => {
   try {
+    const payload = c.get('jwtPayload');
     const presentationId = c.req.param('presentationId');
-    const result = await c.env.DB.prepare(
-      `SELECT * FROM slides WHERE presentation_id = ? ORDER BY order_number`
-    ).bind(presentationId).all();
-    
-    return c.json(result.results || []);
+    const slides = await db.getSlidesForPresentation(c.env.DB, presentationId, payload.sub);
+    return c.json(slides);
   } catch (error) {
     console.error('Failed to fetch slides:', error);
     return c.json({ error: 'Failed to fetch slides' }, 500);
   }
 });
 
-// API: Get all presentations
-app.get('/api/presentations', async (c) => {
+// API: Get user's presentations (protected)
+app.get('/api/presentations', requireAuth, async (c) => {
   try {
-    const queries = new PresentationQueries(c.env.DB);
-    const presentations = await queries.getAllPresentations();
-    
-    // Add slide counts (simplified for now)
-    const presentationsWithCounts = presentations.map(p => ({
-      ...p,
-      slide_count: 13 // TODO: Get actual count from slides table
-    }));
-    
-    return c.json(presentationsWithCounts);
+    const payload = c.get('jwtPayload');
+    const presentations = await db.getUserPresentations(c.env.DB, payload.sub);
+    return c.json(presentations);
   } catch (error) {
     console.error('Failed to fetch presentations:', error);
     return c.json({ error: 'Failed to fetch presentations' }, 500);
@@ -464,10 +639,27 @@ app.post('/api/session/:sessionCode/add-participant', async (c) => {
   }
 });
 
-// API: Start a new presentation session
-app.post('/api/presenter/start-session', async (c) => {
+// API: Start a new presentation session (protected + PIN required)
+app.post('/api/presenter/start-session', requireAuth, async (c) => {
   try {
-    const body = await c.req.json<{ presentationId: string }>();
+    const payload = c.get('jwtPayload');
+    const body = await c.req.json<{ presentationId: string; pin?: string }>();
+    
+    // Get presentation and verify ownership + PIN
+    const presentation = await db.getPresentationWithOwnerCheck(
+      c.env.DB, 
+      body.presentationId, 
+      payload.sub
+    );
+    
+    if (!presentation) {
+      return c.json({ error: 'Presentation not found or unauthorized' }, 404);
+    }
+    
+    // Verify PIN if set
+    if (presentation.pin_code && presentation.pin_code !== body.pin) {
+      return c.json({ error: 'Invalid PIN' }, 403);
+    }
     
     // Generate session code and presenter token
     const sessionCode = generateSessionCode();
@@ -501,6 +693,151 @@ app.post('/api/presenter/start-session', async (c) => {
   } catch (error) {
     console.error('Failed to start session:', error);
     return c.json({ error: 'Failed to start session' }, 500);
+  }
+});
+
+// ====== PRESENTATION MANAGEMENT ENDPOINTS (Protected) ======
+
+// Update presentation details (title, description, PIN)
+app.put('/api/presentations/:id', requireAuth, async (c) => {
+  try {
+    const payload = c.get('jwtPayload');
+    const presentationId = c.req.param('id');
+    const body = await c.req.json();
+    
+    const updated = await db.updatePresentation(
+      c.env.DB,
+      presentationId,
+      payload.sub,
+      body
+    );
+    
+    if (!updated) {
+      return c.json({ error: 'Presentation not found or unauthorized' }, 404);
+    }
+    
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('Failed to update presentation:', error);
+    return c.json({ error: 'Failed to update presentation' }, 500);
+  }
+});
+
+// Generate new PIN for presentation
+app.post('/api/presentations/:id/generate-pin', requireAuth, async (c) => {
+  try {
+    const payload = c.get('jwtPayload');
+    const presentationId = c.req.param('id');
+    const pin = db.generatePinCode();
+    
+    const updated = await db.updatePresentation(
+      c.env.DB,
+      presentationId,
+      payload.sub,
+      { pin_code: pin }
+    );
+    
+    if (!updated) {
+      return c.json({ error: 'Presentation not found or unauthorized' }, 404);
+    }
+    
+    return c.json({ success: true, pin });
+  } catch (error) {
+    console.error('Failed to generate PIN:', error);
+    return c.json({ error: 'Failed to generate PIN' }, 500);
+  }
+});
+
+// ====== SLIDE MANAGEMENT ENDPOINTS (Protected) ======
+
+// Create new slide
+app.post('/api/presentations/:presentationId/slides', requireAuth, async (c) => {
+  try {
+    const payload = c.get('jwtPayload');
+    const presentationId = c.req.param('presentationId');
+    const body = await c.req.json();
+    
+    const slideId = await db.createSlide(c.env.DB, payload.sub, {
+      presentation_id: presentationId,
+      ...body
+    });
+    
+    if (!slideId) {
+      return c.json({ error: 'Failed to create slide or unauthorized' }, 404);
+    }
+    
+    return c.json({ success: true, id: slideId });
+  } catch (error) {
+    console.error('Failed to create slide:', error);
+    return c.json({ error: 'Failed to create slide' }, 500);
+  }
+});
+
+// Update slide
+app.put('/api/slides/:id', requireAuth, async (c) => {
+  try {
+    const payload = c.get('jwtPayload');
+    const slideId = c.req.param('id');
+    const body = await c.req.json();
+    
+    const updated = await db.updateSlide(c.env.DB, slideId, payload.sub, body);
+    
+    if (!updated) {
+      return c.json({ error: 'Slide not found or unauthorized' }, 404);
+    }
+    
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('Failed to update slide:', error);
+    return c.json({ error: 'Failed to update slide' }, 500);
+  }
+});
+
+// Delete slide
+app.delete('/api/slides/:id', requireAuth, async (c) => {
+  try {
+    const payload = c.get('jwtPayload');
+    const slideId = c.req.param('id');
+    
+    const deleted = await db.deleteSlide(c.env.DB, slideId, payload.sub);
+    
+    if (!deleted) {
+      return c.json({ error: 'Slide not found or unauthorized' }, 404);
+    }
+    
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('Failed to delete slide:', error);
+    return c.json({ error: 'Failed to delete slide' }, 500);
+  }
+});
+
+// Reorder slides
+app.post('/api/presentations/:presentationId/slides/reorder', requireAuth, async (c) => {
+  try {
+    const payload = c.get('jwtPayload');
+    const presentationId = c.req.param('presentationId');
+    const body = await c.req.json<{ slideIds: string[] }>();
+    
+    if (!body.slideIds || !Array.isArray(body.slideIds)) {
+      return c.json({ error: 'Invalid slideIds array' }, 400);
+    }
+    
+    const success = await db.reorderSlides(
+      c.env.DB,
+      presentationId,
+      payload.sub,
+      body.slideIds
+    );
+    
+    if (!success) {
+      return c.json({ error: 'Failed to reorder or unauthorized' }, 404);
+    }
+    
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('Failed to reorder slides:', error);
+    return c.json({ error: 'Failed to reorder slides' }, 500);
   }
 });
 

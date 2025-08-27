@@ -239,6 +239,103 @@ export const PRESENTER_HTML = `<!DOCTYPE html>
         .error-message.active {
             display: block;
         }
+        
+        /* PIN Entry Modal Styles */
+        .pin-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .pin-modal.active {
+            display: flex;
+        }
+        
+        .pin-modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        .pin-modal h3 {
+            color: #333;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+        
+        .pin-modal p {
+            color: #666;
+            margin-bottom: 1.5rem;
+            font-size: 0.95rem;
+        }
+        
+        .pin-input {
+            width: 100%;
+            padding: 1rem;
+            font-size: 1.5rem;
+            letter-spacing: 0.3rem;
+            text-align: center;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            font-family: monospace;
+        }
+        
+        .pin-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .pin-modal-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+        
+        .pin-modal-btn {
+            flex: 1;
+            padding: 0.75rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+        
+        .pin-modal-btn.primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        
+        .pin-modal-btn.secondary {
+            background: #f5f5f5;
+            color: #666;
+        }
+        
+        .pin-modal-btn:hover {
+            opacity: 0.9;
+        }
+        
+        .pin-error {
+            color: #dc2626;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+        
+        .pin-error.active {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -283,9 +380,25 @@ export const PRESENTER_HTML = `<!DOCTYPE html>
         </div>
     </div>
     
+    <!-- PIN Entry Modal -->
+    <div class="pin-modal" id="pinModal">
+        <div class="pin-modal-content">
+            <h3>🔒 Enter Presentation PIN</h3>
+            <p>This presentation requires a PIN to start</p>
+            <div class="pin-error" id="pinError">Invalid PIN. Please try again.</div>
+            <input type="password" class="pin-input" id="pinInput" placeholder="••••••" maxlength="6" autofocus />
+            <div class="pin-modal-buttons">
+                <button class="pin-modal-btn secondary" onclick="closePinModal()">Cancel</button>
+                <button class="pin-modal-btn primary" onclick="submitPin()">Start Talk</button>
+            </div>
+        </div>
+    </div>
+    
     <script>
         let presentations = [];
         let currentSession = null;
+        let currentPresentationId = null;
+        let currentButton = null;
         
         // Helper function to escape HTML and remove backslashes
         function escapeHtml(text) {
@@ -300,6 +413,11 @@ export const PRESENTER_HTML = `<!DOCTYPE html>
         async function loadPresentations() {
             try {
                 const response = await fetch('/api/presentations');
+                if (response.status === 401) {
+                    // Not authenticated, redirect to login
+                    window.location.href = '/login?redirect=/presenter';
+                    return;
+                }
                 if (!response.ok) {
                     throw new Error('Failed to load presentations');
                 }
@@ -308,15 +426,14 @@ export const PRESENTER_HTML = `<!DOCTYPE html>
                 displayPresentations();
             } catch (error) {
                 console.error('Error loading presentations:', error);
-                // For now, display a mock presentation since the API isn't ready yet
-                presentations = [{
-                    id: '1193d1ae-71a7-4820-9a77-933e830d3041',
-                    name: 'Cloudflare Tech Talk: Choose Your Own Adventure',
-                    description: 'An interactive presentation showcasing Cloudflare\\'s edge computing platform',
-                    created_by: 'system',
-                    slide_count: 13
-                }];
-                displayPresentations();
+                // Show error message
+                const container = document.getElementById('presentationsContainer');
+                container.innerHTML = \`
+                    <div class="no-presentations">
+                        <h2>Error Loading Presentations</h2>
+                        <p>Please try refreshing the page or contact support.</p>
+                    </div>
+                \`;
             }
         }
         
@@ -338,23 +455,80 @@ export const PRESENTER_HTML = `<!DOCTYPE html>
                     <h3 class="presentation-title">\${escapeHtml(pres.name)}</h3>
                     <p class="presentation-desc">\${escapeHtml(pres.description || 'No description available')}</p>
                     <div class="presentation-meta">
-                        <span class="slide-count">\${pres.slide_count || 13} slides</span>
-                        <span>by \${pres.created_by || 'unknown'}</span>
+                        <span class="slide-count">\${pres.slide_count || 0} slides</span>
+                        <span>\${pres.pin_code ? '🔒 PIN Protected' : '🔓 No PIN'}</span>
                     </div>
-                    <button class="start-button" onclick="startSession('\${pres.id}')">
-                        Start New Session
-                    </button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="start-button" style="flex: 1" onclick="startSession('\${pres.id}', \${pres.pin_code ? 'true' : 'false'})">
+                            Start Talk
+                        </button>
+                        <button class="start-button" style="flex: 1; background: #667eea;" onclick="window.location.href='/presenter/\${pres.id}/edit'">
+                            Edit
+                        </button>
+                        <button class="start-button" style="flex: 1; background: #764ba2;" onclick="window.location.href='/presenter/\${pres.id}/slides'">
+                            Manage Slides
+                        </button>
+                    </div>
                 </div>
             \`).join('');
         }
         
-        async function startSession(presentationId) {
+        function startSession(presentationId, hasPin) {
+            // Store for later use
+            currentPresentationId = presentationId;
+            currentButton = event.target;
+            
+            // If presentation has PIN, show modal
+            if (hasPin === true || hasPin === 'true') {
+                showPinModal();
+            } else {
+                // No PIN required, start directly
+                doStartSession(null);
+            }
+        }
+        
+        function showPinModal() {
+            document.getElementById('pinModal').classList.add('active');
+            document.getElementById('pinError').classList.remove('active');
+            document.getElementById('pinInput').value = '';
+            document.getElementById('pinInput').focus();
+        }
+        
+        function closePinModal() {
+            document.getElementById('pinModal').classList.remove('active');
+            document.getElementById('pinInput').value = '';
+            currentPresentationId = null;
+            currentButton = null;
+        }
+        
+        function submitPin() {
+            const pin = document.getElementById('pinInput').value;
+            if (!pin) {
+                document.getElementById('pinError').textContent = 'Please enter a PIN';
+                document.getElementById('pinError').classList.add('active');
+                return;
+            }
+            doStartSession(pin);
+        }
+        
+        // Handle Enter key in PIN input
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('pinInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    submitPin();
+                }
+            });
+        });
+        
+        async function doStartSession(pin) {
             try {
-                // Show loading state
-                const button = event.target;
-                const originalText = button.textContent;
-                button.disabled = true;
-                button.innerHTML = '<div class="loading" style="margin: 0 auto;"></div>';
+                // Show loading state (only if button exists)
+                let originalText = 'Start Talk';
+                if (currentButton) {
+                    originalText = currentButton.textContent;
+                    currentButton.disabled = true;
+                    currentButton.innerHTML = '<div class="loading" style="margin: 0 auto;"></div>';
+                }
                 
                 // Start the session
                 const response = await fetch('/api/presenter/start-session', {
@@ -362,8 +536,24 @@ export const PRESENTER_HTML = `<!DOCTYPE html>
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ presentationId })
+                    body: JSON.stringify({ presentationId: currentPresentationId, pin })
                 });
+                
+                if (response.status === 401) {
+                    window.location.href = '/login?redirect=/presenter';
+                    return;
+                }
+                
+                if (response.status === 403) {
+                    // Invalid PIN
+                    document.getElementById('pinError').textContent = 'Invalid PIN. Please try again.';
+                    document.getElementById('pinError').classList.add('active');
+                    if (currentButton) {
+                        currentButton.disabled = false;
+                        currentButton.textContent = originalText;
+                    }
+                    return;
+                }
                 
                 if (!response.ok) {
                     throw new Error('Failed to start session');
@@ -374,19 +564,27 @@ export const PRESENTER_HTML = `<!DOCTYPE html>
                 // Show the modal with session details
                 showSessionModal(currentSession);
                 
-                // Reset button
-                button.disabled = false;
-                button.textContent = originalText;
+                // Reset button before closing modal (which clears currentButton)
+                if (currentButton) {
+                    currentButton.disabled = false;
+                    currentButton.textContent = originalText;
+                }
+                
+                // Close PIN modal if open
+                closePinModal();
                 
             } catch (error) {
                 console.error('Error starting session:', error);
                 alert('Failed to start session. Please try again.');
                 
                 // Reset button
-                if (event.target) {
-                    event.target.disabled = false;
-                    event.target.textContent = 'Start New Session';
+                if (currentButton) {
+                    currentButton.disabled = false;
+                    currentButton.textContent = 'Start Talk';
                 }
+                
+                // Close PIN modal if open
+                closePinModal();
             }
         }
         

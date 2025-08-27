@@ -175,17 +175,38 @@ export class SlideRoom {
   
   private async loadPresentationFromD1(presentationId: string) {
     try {
+      console.log(`Loading presentation ${presentationId} from D1...`);
+      
       // Query slides from D1
       const result = await this.env.DB.prepare(
-        `SELECT * FROM slides WHERE presentation_id = ? ORDER BY order_number`
+        `SELECT * FROM slides WHERE presentation_id = ? ORDER BY order_number ASC`
       ).bind(presentationId).all();
       
-      if (result.results) {
+      if (result.results && result.results.length > 0) {
         this.presentationData = result.results;
         console.log(`Loaded ${this.presentationData.length} slides for presentation ${presentationId}`);
+        
+        // Log first and last slide for verification
+        const first = this.presentationData[0] as any;
+        const last = this.presentationData[this.presentationData.length - 1] as any;
+        console.log(`First slide: ${first.title} (order: ${first.order_number})`);
+        console.log(`Last slide: ${last.title} (order: ${last.order_number})`);
+        
+        // Broadcast update to all connected clients
+        this.broadcast({
+          type: 'presentationLoaded',
+          data: {
+            totalSlides: this.presentationData.length,
+            currentSlide: this.getSlideData(this.slideState.currentSlideIndex)
+          }
+        });
+      } else {
+        console.warn(`No slides found for presentation ${presentationId}`);
+        this.presentationData = [];
       }
     } catch (error) {
       console.error('Failed to load presentation from D1:', error);
+      this.presentationData = [];
     }
   }
   
@@ -197,10 +218,19 @@ export class SlideRoom {
       this.slideState.presenterToken = presenterToken;
     }
     
+    // Reset slide state for fresh presentation
+    this.slideState.currentSlideIndex = 0;
+    this.slideState.currentNodeId = 'start';
+    this.slideState.history = ['start'];
+    this.slideState.visitedSlides = new Set([0]);
+    
+    // Clear any existing presentation data to force reload
+    this.presentationData = [];
+    
     // Save to storage
     await this.saveState();
     
-    // Load presentation data from D1
+    // Load fresh presentation data from D1
     await this.loadPresentationFromD1(presentationId);
     
     // Store session info in SQL if available
@@ -300,6 +330,20 @@ export class SlideRoom {
       switch (data.type) {
         case 'navigate':
           await this.navigateToSlide(data.index);
+          break;
+        case 'reloadPresentation':
+          // Reload presentation data from D1 (useful after editing slides)
+          if (this.slideState.presentationId) {
+            await this.loadPresentationFromD1(this.slideState.presentationId);
+            const currentSlide = this.getSlideData(this.slideState.currentSlideIndex);
+            ws.send(JSON.stringify({
+              type: 'presentationReloaded',
+              data: {
+                currentSlide,
+                totalSlides: this.presentationData.length
+              }
+            }));
+          }
           break;
         case 'startPoll':
           // Start a new poll
@@ -875,7 +919,22 @@ export class SlideRoom {
   private getSlideData(index: number) {
     // If we have presentation data from D1, use it
     if (this.presentationData && this.presentationData.length > 0) {
-      const slide = this.presentationData.find((s: any) => s.order_number === index);
+      // Sort slides by order_number to ensure correct sequence
+      const sortedSlides = [...this.presentationData].sort((a: any, b: any) => a.order_number - b.order_number);
+      
+      // Ensure index is within bounds
+      if (index >= sortedSlides.length) {
+        console.warn(`Slide index ${index} out of bounds (max: ${sortedSlides.length - 1})`);
+        return {
+          title: 'End of Presentation',
+          content: ['Thank you for attending!'],
+          bullets: [],
+          totalSlides: sortedSlides.length
+        };
+      }
+      
+      // Get slide by index position (not order_number)
+      const slide = sortedSlides[index];
       if (slide) {
         return {
           title: slide.title,
@@ -885,13 +944,24 @@ export class SlideRoom {
           isBioSlide: slide.is_bio_slide === 1,
           slideType: slide.slide_type,
           pollQuestion: slide.poll_question,
-          pollOptions: slide.poll_options ? JSON.parse(slide.poll_options) : null
+          pollOptions: slide.poll_options ? JSON.parse(slide.poll_options) : null,
+          pollRoutes: slide.poll_routes ? JSON.parse(slide.poll_routes) : null,
+          totalSlides: sortedSlides.length
         };
       }
     }
     
-    // Fallback to hardcoded data
-    const slideData = [
+    // No fallback - if no D1 data, return empty slide
+    console.warn('No presentation data loaded from D1');
+    return {
+      title: 'Loading...',
+      content: ['Presentation data is being loaded'],
+      bullets: [],
+      totalSlides: 0
+    };
+    
+    // DISABLED: Old fallback data (only shown for reference)
+    /*const slideData = [
       {
         title: 'Welcome to the Edge! ⚡',
         content: ['Cloudflare Workers: Choose Your Own Adventure'],
@@ -1019,10 +1089,32 @@ export class SlideRoom {
       title: `Slide ${index + 1}`,
       content: [],
       bullets: []
-    };
+    };*/
   }
   
   private async navigateToSlide(index: number) {
+    // Ensure presentation data is loaded
+    if (!this.presentationData || this.presentationData.length === 0) {
+      console.error('Cannot navigate - no presentation data loaded');
+      if (this.slideState.presentationId) {
+        // Try to load it
+        await this.loadPresentationFromD1(this.slideState.presentationId);
+      }
+      if (!this.presentationData || this.presentationData.length === 0) {
+        return; // Still no data, can't navigate
+      }
+    }
+    
+    const totalSlides = this.presentationData.length;
+    
+    // Ensure index is within bounds
+    if (index < 0) {
+      index = 0;
+    } else if (index >= totalSlides) {
+      console.log(`Navigation requested to slide ${index}, but only ${totalSlides} slides available`);
+      index = totalSlides - 1; // Stay on last slide
+    }
+    
     this.slideState.currentSlideIndex = index;
     this.slideState.visitedSlides.add(index); // Track visited slide
     await this.saveState();
@@ -1116,6 +1208,25 @@ export class SlideRoom {
 
   private async startNewPoll(pollData: any) {
     console.log('Starting new poll with data:', pollData);
+    
+    // If poll has routes (from database), map them to slide indices
+    if (pollData.pollRoutes && this.presentationData && this.presentationData.length > 0) {
+      const sortedSlides = [...this.presentationData].sort((a: any, b: any) => a.order_number - b.order_number);
+      
+      // Map each option to include the correct slideIndex based on the route
+      pollData.options = pollData.options.map((option: any) => {
+        const routeSlideId = pollData.pollRoutes[option.id];
+        if (routeSlideId) {
+          // Find the slide index for this ID
+          const slideIndex = sortedSlides.findIndex((slide: any) => slide.id === routeSlideId);
+          if (slideIndex !== -1) {
+            option.slideIndex = slideIndex;
+            console.log(`Mapped poll option ${option.id} to slide index ${slideIndex}`);
+          }
+        }
+        return option;
+      });
+    }
     
     // Store active poll
     this.activePoll = {

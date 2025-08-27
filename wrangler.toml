@@ -52,6 +52,7 @@ bucket_name = "tech-talk-assets"
 [vars]
 AUDIENCE_URL = "http://localhost:8787/audience"
 ADMIN_KEY = "tech-talk-2025"
+JWT_SECRET = "fade9c9f87fbfb9bc11ad21a54d641a151c80d7e2a1d0e94266a7466fe7d08ce"
 
 # Local development
 [env.development]

@@ -133,13 +133,40 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             right: 110px;
             z-index: 9999;
             text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        /* For initial slides - centered and larger */
+        .qr-container.initial-slide {
+            position: static;
+            margin: 3rem auto 0;
+            display: block;
+            background: white;
+            padding: 25px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            border: 3px solid #F6821F;
+            max-width: 300px;
         }
 
         .qr-code {
-            width: 120px;
-            height: 120px;
+            width: 300px;
+            height: 300px;
             display: block;
             object-fit: contain;
+        }
+        
+        .qr-container.initial-slide .qr-code {
+            width: 250px;
+            height: 250px;
+            margin: 0 auto;
+        }
+        
+        .qr-label {
+            margin-top: 1rem;
+            color: #333;
+            font-size: 1.1rem;
+            font-weight: 600;
         }
 
         .live-indicator {
@@ -355,7 +382,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         <div class="slide-wrapper">
             <img src="/powerpoint-bg.png" class="ppt-background" alt="">
             <div class="slide-content-area">
-                <div class="qr-container">
+                <div class="qr-container" id="mainQRContainer">
                     <img id="qrCode" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" alt="Join QR" class="qr-code" style="display: block;">
                 </div>
 
@@ -388,6 +415,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         const AUDIENCE_URL = window.location.origin + '/audience/' + roomId;
         let currentSlideIndex = 0;
         let slides = [];
+        let totalSlidesFromDB = 0; // Track actual database slide count
         let ws = null;
         let currentPollData = null;
         let pollTimer = null;
@@ -577,6 +605,29 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                         });
                         slideDiv.appendChild(ul);
                     }
+                    
+                    // Add QR code for initial slides (not bio slides)
+                    // Check if this is the first slide (initial) and not a bio slide
+                    if (index === 0 && !slide.isBioSlide) {
+                        const qrDiv = document.createElement('div');
+                        qrDiv.className = 'qr-container initial-slide';
+                        qrDiv.innerHTML = \`
+                            <img class="qr-code" src="" alt="Join QR" id="slideQR\${index}">
+                            <div class="qr-label">Scan to Join</div>
+                        \`;
+                        slideDiv.appendChild(qrDiv);
+                        
+                        // We'll populate this QR code after the slide is added to the DOM
+                        setTimeout(() => {
+                            const qrImg = document.getElementById(\`slideQR\${index}\`);
+                            if (qrImg) {
+                                const mainQR = document.getElementById('qrCode');
+                                if (mainQR && mainQR.src) {
+                                    qrImg.src = mainQR.src;
+                                }
+                            }
+                        }, 100);
+                    }
                 }
                 
                 slideContent.appendChild(slideDiv);
@@ -724,6 +775,11 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                         if (data.data.currentSlideIndex !== undefined) {
                             currentSlideIndex = data.data.currentSlideIndex;
                         }
+                        // Update total slides count from database if provided
+                        if (data.data.currentSlide && data.data.currentSlide.totalSlides !== undefined) {
+                            totalSlidesFromDB = data.data.currentSlide.totalSlides;
+                            console.log('Updated total slides from DB:', totalSlidesFromDB);
+                        }
                         // Update slide content if provided from server
                         if (data.data.currentSlide) {
                             updateSlideContentFromServer(data.data.currentSlide);
@@ -746,6 +802,11 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                     if (data.data) {
                         if (data.data.index !== undefined) {
                             currentSlideIndex = data.data.index;
+                        }
+                        // Update total slides count from database if provided
+                        if (data.data.totalSlides !== undefined) {
+                            totalSlidesFromDB = data.data.totalSlides;
+                            console.log('Updated total slides from DB:', totalSlidesFromDB);
                         }
                         // Update with server content
                         updateSlideContentFromServer(data.data);
@@ -784,6 +845,18 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                     // All participants have won
                     showAllWinnersMessage(data.data);
                     break;
+                    
+                case 'presentationLoaded':
+                    // Presentation data loaded from database
+                    if (data.data && data.data.totalSlides !== undefined) {
+                        totalSlidesFromDB = data.data.totalSlides;
+                        console.log('Presentation loaded with', totalSlidesFromDB, 'slides');
+                        // Update current slide display
+                        if (data.data.currentSlide) {
+                            updateSlideContentFromServer(data.data.currentSlide);
+                        }
+                    }
+                    break;
             }
         }
 
@@ -792,18 +865,27 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         }
 
         function previousSlide() {
+            console.log('Previous slide - current:', currentSlideIndex);
             if (currentSlideIndex > 0) {
                 currentSlideIndex--;
                 updateSlideDisplay();
                 sendSlideUpdate();
+            } else {
+                console.log('Already at first slide (0)');
             }
         }
 
         function nextSlide() {
-            if (currentSlideIndex < slides.length - 1) {
+            // Use database slide count if available, otherwise fall back to hardcoded slides
+            const maxSlides = totalSlidesFromDB > 0 ? totalSlidesFromDB : slides.length;
+            console.log('Next slide - current:', currentSlideIndex, 'max:', maxSlides);
+            
+            if (currentSlideIndex < maxSlides - 1) {
                 currentSlideIndex++;
                 updateSlideDisplay();
                 sendSlideUpdate();
+            } else {
+                console.log('Already at last slide (' + (maxSlides - 1) + ')');
             }
         }
 
@@ -812,13 +894,47 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                 slide.classList.toggle('active', index === currentSlideIndex);
             });
             
-            // Slide number element was removed with admin controls
-            // No need to update it anymore
+            // Hide main QR container for initial slides (first slide) as they have their own QR
+            const mainQR = document.getElementById('mainQRContainer');
+            if (mainQR) {
+                // Hide for first slide (initial) that isn't a bio slide
+                const isInitialSlide = currentSlideIndex === 0;
+                const currentSlideData = slideData[currentSlideIndex];
+                const isBioSlide = currentSlideData && currentSlideData.isBioSlide;
+                
+                // Always show QR code on first slide
+                mainQR.style.display = 'block';
+            }
         }
         
         function updateSlideContentFromServer(slideData) {
-            const slideDiv = document.querySelector('.slide.active');
+            let slideDiv = document.querySelector('.slide.active');
+            
+            // If no slide exists for this index, create it dynamically
+            if (!slideDiv && currentSlideIndex !== undefined) {
+                console.log('Creating dynamic slide for index:', currentSlideIndex);
+                const slideContent = document.getElementById('slideContent');
+                
+                // Create new slide element
+                slideDiv = document.createElement('div');
+                slideDiv.className = 'slide active';
+                slideDiv.setAttribute('data-index', currentSlideIndex.toString());
+                slideContent.appendChild(slideDiv);
+                
+                // Update slides NodeList to include new slide
+                slides = document.querySelectorAll('.slide');
+            }
+            
             if (!slideDiv) return;
+            
+            // Store current slide data for poll usage
+            window.currentSlideData = slideData;
+            
+            // Update total slides count if provided
+            if (slideData.totalSlides !== undefined) {
+                totalSlidesFromDB = slideData.totalSlides;
+                console.log('Updated total slides from server data:', totalSlidesFromDB);
+            }
             
             // Check if this is the bio slide
             if (slideData.isBioSlide) {
@@ -862,13 +978,20 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                     title.textContent = slideData.title || 'Untitled';
                     contentWrapper.appendChild(title);
                     
-                    // Add content paragraphs
+                    // Add content paragraphs with matching audience view styling
                     if (slideData.content && Array.isArray(slideData.content)) {
                         slideData.content.forEach(text => {
                             const p = document.createElement('p');
                             p.textContent = text;
                             if (currentSlideIndex === 0) {
                                 p.style.fontSize = '2rem';
+                                p.style.color = '#333';
+                            } else {
+                                // Match audience view styling
+                                p.style.fontSize = '1.4rem';
+                                p.style.marginBottom = '1rem';
+                                p.style.fontWeight = 'bold';
+                                p.style.lineHeight = '1.4';
                                 p.style.color = '#333';
                             }
                             contentWrapper.appendChild(p);
@@ -912,13 +1035,20 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                     title.textContent = slideData.title || 'Untitled';
                     slideDiv.appendChild(title);
                     
-                    // Add content paragraphs
+                    // Add content paragraphs with matching audience view styling
                     if (slideData.content && Array.isArray(slideData.content)) {
                         slideData.content.forEach(text => {
                             const p = document.createElement('p');
                             p.textContent = text;
                             if (currentSlideIndex === 0) {
                                 p.style.fontSize = '2rem';
+                                p.style.color = '#333';
+                            } else {
+                                // Match audience view styling
+                                p.style.fontSize = '1.4rem';
+                                p.style.marginBottom = '1rem';
+                                p.style.fontWeight = 'bold';
+                                p.style.lineHeight = '1.4';
                                 p.style.color = '#333';
                             }
                             slideDiv.appendChild(p);
@@ -941,10 +1071,13 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
 
         function sendSlideUpdate() {
             if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('Sending navigation to slide:', currentSlideIndex);
                 ws.send(JSON.stringify({
                     type: 'navigate',
                     index: currentSlideIndex
                 }));
+            } else {
+                console.log('WebSocket not available for navigation');
             }
         }
 
@@ -1002,6 +1135,16 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                         e.preventDefault();
                         triggerFinale();
                         break;
+                    case 'd':
+                    case 'D':
+                        e.preventDefault();
+                        // Debug: log current state
+                        console.log('DEBUG STATE:');
+                        console.log('- Current slide index:', currentSlideIndex);
+                        console.log('- Total slides from DB:', totalSlidesFromDB);
+                        console.log('- Hardcoded slides length:', slides.length);
+                        console.log('- WebSocket ready:', ws && ws.readyState === WebSocket.OPEN);
+                        break;
                 }
             });
         }
@@ -1010,6 +1153,33 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         async function startPoll() {
             console.log('🗳️ Starting poll for current slide...');
             
+            // Check if current slide has poll data
+            const currentSlide = window.currentSlideData;
+            if (currentSlide && currentSlide.pollQuestion && currentSlide.pollOptions) {
+                console.log('Using poll from current slide');
+                
+                const pollData = {
+                    pollId: 'poll-' + Date.now(),
+                    question: currentSlide.pollQuestion,
+                    options: currentSlide.pollOptions,
+                    pollRoutes: currentSlide.pollRoutes || {},
+                    duration: 20
+                };
+                
+                // Start poll via WebSocket to notify all clients
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'startPoll',
+                        data: pollData
+                    }));
+                    
+                    // Also show on presenter view
+                    showPollOverlay(pollData);
+                }
+                return;
+            }
+            
+            // Fallback to fetching poll options (for non-database slides)
             try {
                 // Fetch dynamic poll options from backend
                 const response = await fetch('/api/poll-options?roomId=' + roomId);
@@ -1437,8 +1607,10 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
 
         function triggerFinale() {
             console.log('🎉 Going to final slide...');
-            // Navigate to the last slide (bio slide)
-            const finalSlideIndex = slideData.length - 1;
+            // Navigate to the last slide - use database count if available
+            const maxSlides = totalSlidesFromDB > 0 ? totalSlidesFromDB : slides.length;
+            const finalSlideIndex = maxSlides - 1;
+            console.log('Navigating to final slide:', finalSlideIndex, 'of', maxSlides);
             currentSlideIndex = finalSlideIndex;
             updateSlideDisplay();
             sendSlideUpdate();
