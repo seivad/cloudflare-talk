@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Safari Fix Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+            overflow: hidden;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+        
+        .app-container { 
+            height: 100vh;
+            height: -webkit-fill-available;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        
+        .main-view { 
+            flex: 1; 
+            padding: 1rem; 
+            padding-top: env(safe-area-inset-top, 1rem);
+            padding-bottom: calc(1rem + 60px + env(safe-area-inset-bottom, 0px));
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        .content {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            padding: 2rem;
+            color: #333;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .app-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 1rem;
+            padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            font-size: 0.875rem;
+            backdrop-filter: blur(10px);
+        }
+        
+        .test-info {
+            background: rgba(0, 208, 132, 0.2);
+            border: 1px solid #00d084;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="main-view">
+            <div class="content">
+                <div class="test-info">
+                    <h2>Safari Scrolling Fix Test</h2>
+                    <p>This page tests the Safari browser bar scrolling issue fix.</p>
+                    <ul style="list-style: disc; padding-left: 20px; margin-top: 10px;">
+                        <li>✅ Uses -webkit-fill-available for proper height</li>
+                        <li>✅ Uses viewport-fit=cover meta tag</li>
+                        <li>✅ Uses env(safe-area-inset-*) for padding</li>
+                        <li>✅ Fixed positioning to prevent viewport jumping</li>
+                    </ul>
+                </div>
+                
+                <h1>Test Content</h1>
+                <p>Try scrolling this page on Safari mobile with the browser bar in different positions.</p>
+                
+                <!-- Generate some content to make it scrollable -->
+                <div style="margin-top: 2rem;">
+                    <h3>Scroll Test Content</h3>
+                    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+                    <p>Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+                    <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
+                    <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum.</p>
+                    <p>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia.</p>
+                    <br>
+                    <p>Additional content to ensure scrolling...</p>
+                    <p>Line 1</p>
+                    <p>Line 2</p>
+                    <p>Line 3</p>
+                    <p>Line 4</p>
+                    <p>Line 5</p>
+                    <p>Line 6</p>
+                    <p>Line 7</p>
+                    <p>Line 8</p>
+                    <p>Line 9</p>
+                    <p>Line 10</p>
+                    <p>Line 11</p>
+                    <p>Line 12</p>
+                    <p>Line 13</p>
+                    <p>Line 14</p>
+                    <p>Line 15</p>
+                    <p>Line 16</p>
+                    <p>Line 17</p>
+                    <p>Line 18</p>
+                    <p>Line 19</p>
+                    <p>Line 20</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="app-footer">
+            <span>Footer - Should stay at bottom with proper padding</span>
+        </div>
+    </div>
+</body>
+</html>

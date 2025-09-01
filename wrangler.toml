@@ -7,6 +7,13 @@ account_id = "6328a3531a28b413e6ca1e95f794a4dc"
 # Static assets
 assets = { directory = "public" }
 
+
+# Custom domain route
+routes = [{ pattern = "refactory.com.au", custom_domain = true }]
+
+[observability]
+enabled = true
+
 # Durable Objects
 [[durable_objects.bindings]]
 name = "SLIDE_ROOM"
@@ -42,18 +49,3 @@ max_batch_timeout = 5
 binding = "DB"
 database_name = "tech-talk-db"
 database_id = "a9f392a1-a370-4be3-922f-51070793c868"
-
-# R2 Storage
-[[r2_buckets]]
-binding = "ASSETS_BUCKET"
-bucket_name = "tech-talk-assets"
-
-# Environment Variables
-[vars]
-AUDIENCE_URL = "http://localhost:8787/audience"
-ADMIN_KEY = "tech-talk-2025"
-JWT_SECRET = "fade9c9f87fbfb9bc11ad21a54d641a151c80d7e2a1d0e94266a7466fe7d08ce"
-
-# Local development
-[env.development]
-vars = { ENVIRONMENT = "development" }

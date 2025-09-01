@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Audience List</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            padding: 20px;
+            margin: 0;
+        }
+        .controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+        }
+        button {
+            display: block;
+            margin: 10px 0;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #5a67d8;
+        }
+        .info {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        h3 {
+            margin-top: 0;
+        }
+        code {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Audience List Test</h1>
+    <p>Test the audience list overlay functionality</p>
+    
+    <div class="controls">
+        <h3>Test Controls</h3>
+        <button onclick="addRandomParticipants(5)">Add 5 Participants</button>
+        <button onclick="addRandomParticipants(10)">Add 10 Participants</button>
+        <button onclick="addRandomParticipants(25)">Add 25 Participants</button>
+        <button onclick="clearParticipants()">Clear All</button>
+        <button onclick="showAudienceList()">Show List (Press A)</button>
+        
+        <div class="info">
+            <strong>Keyboard Shortcuts:</strong><br>
+            <code>A</code> - Show audience list<br>
+            <code>ESC</code> - Close list
+        </div>
+    </div>
+    
+    <script>
+        // Participant tracking
+        const connectedParticipants = new Map();
+        
+        const testNames = [
+            { firstName: 'Mick', lastName: 'Davies' },
+            { firstName: 'Steven', lastName: 'Williams' },
+            { firstName: 'Hayley', lastName: 'Davis' },
+            { firstName: 'Sarah', lastName: 'Johnson' },
+            { firstName: 'Alex', lastName: 'Chen' },
+            { firstName: 'Emma', lastName: 'Thompson' },
+            { firstName: 'Jack', lastName: 'Brown' },
+            { firstName: 'Lisa', lastName: 'Martinez' },
+            { firstName: 'David', lastName: 'Anderson' },
+            { firstName: 'Sophie', lastName: 'Wilson' },
+            { firstName: 'Michael', lastName: 'Taylor' },
+            { firstName: 'Jessica', lastName: 'Moore' },
+            { firstName: 'Ryan', lastName: 'Garcia' },
+            { firstName: 'Olivia', lastName: 'Rodriguez' },
+            { firstName: 'Daniel', lastName: 'Lee' },
+            { firstName: 'Isabella', lastName: 'Harris' },
+            { firstName: 'James', lastName: 'Clark' },
+            { firstName: 'Emily', lastName: 'Lewis' },
+            { firstName: 'Andrew', lastName: 'Walker' },
+            { firstName: 'Ava', lastName: 'Hall' },
+            { firstName: 'Matthew', lastName: 'Allen' },
+            { firstName: 'Sophia', lastName: 'Young' },
+            { firstName: 'Christopher', lastName: 'King' },
+            { firstName: 'Madison', lastName: 'Wright' },
+            { firstName: 'Joshua', lastName: 'Scott' }
+        ];
+        
+        function addRandomParticipants(count) {
+            for (let i = 0; i < count; i++) {
+                const randomName = testNames[Math.floor(Math.random() * testNames.length)];
+                const participantId = 'test_' + Date.now() + '_' + Math.random();
+                connectedParticipants.set(participantId, {
+                    firstName: randomName.firstName,
+                    lastName: randomName.lastName,
+                    lastInitial: randomName.lastName.charAt(0),
+                    joinedAt: Date.now()
+                });
+            }
+            console.log('Added', count, 'participants. Total:', connectedParticipants.size);
+        }
+        
+        function clearParticipants() {
+            connectedParticipants.clear();
+            console.log('Cleared all participants');
+        }
+        
+        function showAudienceList() {
+            console.log('👥 Showing audience list...');
+            
+            // Get or create overlay
+            let overlay = document.getElementById('audienceListOverlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'audienceListOverlay';
+                overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: none; z-index: 9999; background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(10px);';
+                document.body.appendChild(overlay);
+            }
+            
+            // Build participant list HTML
+            const participants = Array.from(connectedParticipants.values()).sort((a, b) => {
+                // Sort by first name
+                return a.firstName.localeCompare(b.firstName);
+            });
+            
+            let listHTML = '<div style="padding: 3rem; height: 100%; display: flex; flex-direction: column;">';
+            listHTML += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">';
+            listHTML += '<h1 style="font-size: 3rem; color: white; margin: 0;">👥 Audience Members (' + participants.length + ')</h1>';
+            listHTML += '<div style="font-size: 1.2rem; color: #ccc;">Press ESC to close</div>';
+            listHTML += '</div>';
+            
+            // Create scrollable two-column list
+            listHTML += '<div style="flex: 1; overflow-y: auto; background: rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 2rem;">';
+            
+            if (participants.length === 0) {
+                listHTML += '<div style="text-align: center; color: #999; font-size: 1.5rem; padding: 3rem;">No participants have joined yet</div>';
+            } else {
+                listHTML += '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; max-width: 1200px; margin: 0 auto;">';
+                
+                participants.forEach((participant, index) => {
+                    const fullName = participant.lastInitial ? 
+                        participant.firstName + ' ' + participant.lastInitial + '.' : 
+                        participant.firstName;
+                    
+                    listHTML += '<div style="background: rgba(255, 255, 255, 0.1); padding: 1rem 1.5rem; border-radius: 8px; display: flex; align-items: center; gap: 1rem;">';
+                    listHTML += '<div style="font-size: 1.5rem; opacity: 0.5;">' + (index + 1) + '.</div>';
+                    listHTML += '<div style="font-size: 1.3rem; color: white; flex: 1;">' + fullName + '</div>';
+                    listHTML += '</div>';
+                });
+                
+                listHTML += '</div>';
+            }
+            
+            listHTML += '</div>';
+            listHTML += '</div>';
+            
+            overlay.innerHTML = listHTML;
+            overlay.style.display = 'block';
+            
+            // Handle ESC key
+            const closeList = (e) => {
+                if (e && e.key && e.key !== 'Escape' && e.key !== 'Esc') {
+                    return;
+                }
+                overlay.style.display = 'none';
+                overlay.innerHTML = '';
+                document.removeEventListener('keydown', closeList, true);
+            };
+            
+            // Use capture phase
+            document.addEventListener('keydown', closeList, true);
+        }
+        
+        // Keyboard handler
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'a' || e.key === 'A') {
+                e.preventDefault();
+                showAudienceList();
+            }
+        });
+        
+        // Add some initial participants for testing
+        addRandomParticipants(8);
+    </script>
+</body>
+</html>

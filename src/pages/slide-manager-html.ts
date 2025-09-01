@@ -246,7 +246,7 @@ export const SLIDE_MANAGER_HTML = `<!DOCTYPE html>
             padding: 1.5rem;
             border-top: 1px solid #e5e7eb;
             display: flex;
-            justify-content: flex-end;
+            justify-content: space-between;
             gap: 0.5rem;
         }
         
@@ -315,6 +315,7 @@ export const SLIDE_MANAGER_HTML = `<!DOCTYPE html>
             border-radius: 4px;
             cursor: pointer;
             transition: all 0.3s;
+            margin-top: 10px;
         }
         
         .add-item-btn:hover {
@@ -571,9 +572,13 @@ export const SLIDE_MANAGER_HTML = `<!DOCTYPE html>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-danger" id="deleteSlideBtn" onclick="deleteSlide()">Delete Slide</button>
-                <button class="btn btn-secondary" onclick="closeSlideModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="saveSlide()">Save Changes</button>
+                <div>
+                    <button class="btn btn-danger" id="deleteSlideBtn" onclick="deleteSlide()">Delete Slide</button>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-secondary" onclick="closeSlideModal()">Cancel</button>
+                    <button class="btn btn-primary" onclick="saveSlide()">Save Changes</button>
+                </div>
             </div>
         </div>
     </div>
@@ -678,9 +683,6 @@ export const SLIDE_MANAGER_HTML = `<!DOCTYPE html>
                         <div class="slide-actions">
                             <button class="btn btn-primary btn-sm" onclick="editSlide('\${slide.id}')">
                                 <i class="fas fa-edit"></i> Edit
-                            </button>
-                            <button class="btn btn-danger btn-sm" onclick="confirmDeleteSlide('\${slide.id}')">
-                                <i class="fas fa-trash"></i> Delete
                             </button>
                         </div>
                     </div>

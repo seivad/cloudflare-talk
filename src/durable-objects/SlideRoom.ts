@@ -128,12 +128,41 @@ export class SlideRoom {
     return `participant_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
   
+  private filterProfanity(text: string): string {
+    // Same profanity filter as client side
+    const profanityList = [
+      'fuck', 'shit', 'ass', 'bitch', 'damn', 'hell', 'crap', 'piss',
+      'dick', 'cock', 'pussy', 'bastard', 'slut', 'whore', 'fag',
+      'cunt', 'nigger', 'nigga', 'retard', 'gay', 'homo'
+    ];
+    
+    let filtered = text;
+    const specialChars = ['$', '@', '#', '%', '&', '*', '!', '^'];
+    
+    profanityList.forEach(word => {
+      const regex = new RegExp(word, 'gi');
+      filtered = filtered.replace(regex, (match) => {
+        return match.split('').map(() => 
+          specialChars[Math.floor(Math.random() * specialChars.length)]
+        ).join('');
+      });
+    });
+    
+    return filtered;
+  }
+  
   private async getActiveParticipants(excludeWinners = false) {
     let participants = [];
+    
+    // Ensure participantMap exists
+    if (!this.participantMap) {
+      this.participantMap = new Map();
+    }
     
     if (!this.sql || typeof this.sql.exec !== 'function') {
       // Fall back to in-memory participant map
       participants = Array.from(this.participantMap.values());
+      console.log(`Using in-memory participants: ${participants.length} found`);
     } else {
       try {
         const result = await this.sql.exec(
@@ -143,9 +172,17 @@ export class SlideRoom {
           Date.now() - 3600000 // Active in last hour
         );
         participants = result.results || [];
+        console.log(`Found ${participants.length} participants from SQL`);
+        
+        // If SQL is empty but we have in-memory participants, use those
+        if (participants.length === 0 && this.participantMap.size > 0) {
+          participants = Array.from(this.participantMap.values());
+          console.log(`SQL empty, using ${participants.length} in-memory participants`);
+        }
       } catch (error) {
         console.error('Failed to get participants from SQL:', error);
         participants = Array.from(this.participantMap.values());
+        console.log(`SQL error, falling back to ${participants.length} in-memory participants`);
       }
     }
     
@@ -211,23 +248,35 @@ export class SlideRoom {
   }
   
   async initializeSession(presentationId: string, sessionCode: string, presenterToken?: string) {
-    // Store session information
-    this.slideState.presentationId = presentationId;
-    this.slideState.sessionCode = sessionCode;
-    if (presenterToken) {
-      this.slideState.presenterToken = presenterToken;
-    }
+    console.log(`Initializing session with code ${sessionCode} for presentation ${presentationId}`);
     
-    // Reset slide state for fresh presentation
-    this.slideState.currentSlideIndex = 0;
-    this.slideState.currentNodeId = 'start';
-    this.slideState.history = ['start'];
-    this.slideState.visitedSlides = new Set([0]);
+    // Clear ALL existing state to ensure fresh start
+    await this.state.storage.deleteAll();
+    
+    // Reset all in-memory state
+    this.slideState = {
+      currentSlideIndex: 0,
+      currentNodeId: 'start',
+      history: ['start'],
+      participantCount: 0,
+      visitedSlides: new Set([0]),
+      presentationId: presentationId,
+      sessionCode: sessionCode,
+      presenterToken: presenterToken
+    };
     
     // Clear any existing presentation data to force reload
     this.presentationData = [];
     
-    // Save to storage
+    // Clear participants and polls
+    this.participantMap.clear();
+    this.prizeWinners.clear();
+    this.activePoll = null;
+    
+    // Re-initialize SQL tables (they get cleared with deleteAll)
+    await this.initializeSQLTables();
+    
+    // Save the new clean state
     await this.saveState();
     
     // Load fresh presentation data from D1
@@ -248,6 +297,8 @@ export class SlideRoom {
       }
     }
     
+    console.log('Session initialized successfully');
+    
     return {
       success: true,
       sessionCode,
@@ -260,6 +311,7 @@ export class SlideRoom {
     console.log('SlideRoom received request:', url.pathname);
     
     // Load state on first request
+    // Note: State will be completely refreshed when initializeSession is called
     if (!this.slideState.sessionCode) {
       await this.loadState();
     }
@@ -355,6 +407,35 @@ export class SlideRoom {
         case 'pickPrizeWinner':
           await this.pickAndBroadcastPrizeWinner();
           break;
+        case 'requestParticipantList':
+          // Send full participant list to the requester
+          const participants = await this.getActiveParticipants(false);
+          
+          // Deduplicate participants by name
+          const uniqueParticipants = new Map();
+          participants.forEach(p => {
+            const firstName = p.firstName || p.first_name;
+            const lastName = p.lastName || p.last_name || '';
+            const key = firstName + '_' + lastName;
+            if (!uniqueParticipants.has(key)) {
+              uniqueParticipants.set(key, {
+                firstName: firstName,
+                lastName: lastName,
+                lastInitial: lastName.charAt(0)
+              });
+            }
+          });
+          
+          const participantList = Array.from(uniqueParticipants.values());
+          
+          ws.send(JSON.stringify({
+            type: 'participantList',
+            data: {
+              participants: participantList,
+              count: participantList.length
+            }
+          }));
+          break;
         case 'ping':
           // Respond to ping with pong to keep connection alive
           try {
@@ -365,15 +446,16 @@ export class SlideRoom {
           break;
         case 'join':
           // Re-send current state when client rejoins
-          console.log('Client joined/rejoined room:', data.roomId);
+          console.log('Client joined/rejoined room:', data.roomId, 'with participant:', data.participant);
           
           // Store participant info if provided
-          if (data.participant) {
+          if (data.participant && data.participant.firstName && data.participant.firstName !== 'Anonymous') {
             const participantId = this.generateParticipantId();
+            // Apply profanity filter to names
             const participant = {
               id: participantId,
-              firstName: data.participant.firstName || 'Anonymous',
-              lastName: data.participant.lastName || '',
+              firstName: this.filterProfanity(data.participant.firstName || 'Anonymous'),
+              lastName: this.filterProfanity(data.participant.lastName || ''),
               joinedAt: Date.now(),
               wsId: ws
             };
@@ -403,6 +485,20 @@ export class SlideRoom {
               this.participantMap = new Map();
             }
             this.participantMap.set(ws, participant);
+            
+            // Broadcast new participant joined to ALL clients (including presenters)
+            // This ensures the presenter sees a greeting when someone joins or rejoins
+            console.log('Broadcasting participantJoined for:', participant.firstName, participant.lastName);
+            this.broadcast({
+              type: 'participantJoined',
+              data: {
+                firstName: participant.firstName,
+                lastName: participant.lastName,
+                lastInitial: participant.lastName ? participant.lastName.charAt(0) : '',
+                timestamp: Date.now()
+              }
+            });
+            console.log('Broadcast sent to', this.clients.size, 'clients');
           }
           
           const currentSlide = this.getSlideData(this.slideState.currentSlideIndex);
@@ -439,6 +535,36 @@ export class SlideRoom {
   }
 
   async webSocketClose(ws: WebSocket) {
+    // Remove the participant from our tracking when they disconnect
+    const participant = this.participantMap.get(ws);
+    if (participant) {
+      console.log(`Participant disconnected: ${participant.firstName} ${participant.lastInitial || ''}`);
+      this.participantMap.delete(ws);
+      
+      // Also try to mark as inactive in SQL if available
+      if (this.sql && typeof this.sql.exec === 'function' && participant.id) {
+        try {
+          await this.sql.exec(
+            `UPDATE participants SET last_seen = ? WHERE id = ?`,
+            Date.now() - 7200000, // Mark as very old (2 hours ago) so they don't show in active list
+            participant.id
+          );
+        } catch (error) {
+          console.error('Failed to update participant last_seen:', error);
+        }
+      }
+      
+      // Broadcast that a participant left
+      this.broadcast({
+        type: 'participantLeft',
+        data: {
+          firstName: participant.firstName,
+          lastInitial: participant.lastInitial || '',
+          timestamp: Date.now()
+        }
+      });
+    }
+    
     this.clients.delete(ws);
     
     // Update participant count when someone disconnects
@@ -746,6 +872,7 @@ export class SlideRoom {
     
     if (result && !result.error) {
       const winner = result;
+      console.log(`Broadcasting winner: ${winner.firstName} ${winner.lastName}`);
       this.broadcast({
         type: 'prizeWinner',
         data: {
@@ -759,6 +886,7 @@ export class SlideRoom {
         }
       });
     } else if (result && result.error === 'all_won') {
+      console.log('Broadcasting all winners selected message');
       this.broadcast({
         type: 'allWinnersSelected',
         data: {
@@ -766,16 +894,32 @@ export class SlideRoom {
           totalWinners: this.prizeWinners.size
         }
       });
+    } else {
+      // No participants available
+      console.log('No participants to select from - not broadcasting anything');
+      // Optionally, we could broadcast a message to the presenter
+      this.broadcast({
+        type: 'noParticipants',
+        data: {
+          message: 'No participants available. Make sure audience members have joined from their phones.'
+        }
+      });
     }
   }
   
   private async pickRandomParticipant() {
+    console.log('Starting prize winner selection...');
+    console.log(`Prize winners so far: ${this.prizeWinners.size}`);
+    
     // Get participants excluding previous winners
     const participants = await this.getActiveParticipants(true);
+    console.log(`Eligible participants for prize: ${participants.length}`);
     
     if (participants.length === 0) {
       // Check if all participants have won
       const allParticipants = await this.getActiveParticipants(false);
+      console.log(`Total participants (including winners): ${allParticipants.length}`);
+      
       if (allParticipants.length > 0 && this.prizeWinners.size > 0) {
         console.log('All participants have already won prizes!');
         return { 
@@ -784,6 +928,7 @@ export class SlideRoom {
         };
       } else {
         console.log('No participants available for prize selection');
+        console.log('Make sure audience members have joined from their phones');
         return null;
       }
     }

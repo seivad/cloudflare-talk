@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Greeting System</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            padding: 20px;
+            min-height: 100vh;
+            position: relative;
+        }
+        .controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+        button {
+            display: block;
+            margin: 10px 0;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #5a67d8;
+        }
+        .position-marker {
+            position: fixed;
+            bottom: 60px;
+            left: 110px;
+            background: rgba(255, 0, 0, 0.3);
+            padding: 10px;
+            border: 2px dashed red;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+            }
+            to {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Greeting System Test</h1>
+    <p>Test the participant greeting animations</p>
+    
+    <div class="position-marker">
+        Greetings appear here<br>
+        (bottom: 60px, left: 110px)
+    </div>
+    
+    <div class="controls">
+        <h3>Test Controls</h3>
+        <button onclick="testSingleGreeting()">Test Single Greeting</button>
+        <button onclick="testMultipleGreetings()">Test Multiple (Queue)</button>
+        <button onclick="testRapidGreetings()">Test Rapid Join (5 people)</button>
+    </div>
+    
+    <script>
+        // Greeting system code (same as in the app)
+        const greetingQueue = [];
+        let isShowingGreeting = false;
+        
+        const greetingMessages = [
+            'Hey {name}!',
+            'Welcome {name}!',
+            'What\'s up {name}',
+            'Hello {name}!',
+            'Good to see you {name}',
+            'Glad you\'re here {name}',
+            'Thanks for joining {name}',
+            'Greetings {name}!',
+            'Hi there {name}',
+            'Welcome aboard {name}'
+        ];
+        
+        const testNames = [
+            { firstName: 'Mick', lastName: 'Davies' },
+            { firstName: 'Steven', lastName: 'Williams' },
+            { firstName: 'Hayley', lastName: 'Davis' },
+            { firstName: 'Sarah', lastName: 'Johnson' },
+            { firstName: 'Alex', lastName: 'Chen' },
+            { firstName: 'Emma', lastName: 'Thompson' },
+            { firstName: 'Jack', lastName: 'Brown' },
+            { firstName: 'Lisa', lastName: 'Martinez' }
+        ];
+        
+        function getRandomGreeting(firstName, lastInitial) {
+            const greeting = greetingMessages[Math.floor(Math.random() * greetingMessages.length)];
+            const name = lastInitial ? firstName + ' ' + lastInitial + '.' : firstName;
+            return greeting.replace('{name}', name);
+        }
+        
+        function showWelcomeGreeting(participant) {
+            // Add to queue
+            greetingQueue.push(participant);
+            
+            // If not currently showing a greeting, start processing the queue
+            if (!isShowingGreeting) {
+                processGreetingQueue();
+            }
+        }
+        
+        function processGreetingQueue() {
+            if (greetingQueue.length === 0) {
+                isShowingGreeting = false;
+                console.log('Queue empty, finished showing greetings');
+                return;
+            }
+            
+            isShowingGreeting = true;
+            const participant = greetingQueue.shift();
+            console.log('Showing greeting for:', participant.firstName, participant.lastInitial);
+            
+            // Create greeting element
+            const greetingDiv = document.createElement('div');
+            greetingDiv.style.cssText = 
+                'position: fixed;' +
+                'bottom: 60px;' +
+                'left: 110px;' +
+                'background: rgba(0, 0, 0, 0.8);' +
+                'color: white;' +
+                'padding: 12px 20px;' +
+                'border-radius: 25px;' +
+                'font-size: 18px;' +
+                'font-weight: 500;' +
+                'z-index: 1000;' +
+                'backdrop-filter: blur(10px);' +
+                'animation: slideInLeft 0.5s ease-out;' +
+                'box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);';
+            
+            greetingDiv.textContent = getRandomGreeting(participant.firstName, participant.lastInitial);
+            document.body.appendChild(greetingDiv);
+            
+            // Remove after 2.5 seconds with fade out
+            setTimeout(() => {
+                greetingDiv.style.animation = 'fadeOut 0.5s ease-out';
+                setTimeout(() => {
+                    greetingDiv.remove();
+                    // Process next in queue after a small delay
+                    setTimeout(() => processGreetingQueue(), 200);
+                }, 500);
+            }, 2500);
+        }
+        
+        // Test functions
+        function testSingleGreeting() {
+            const randomName = testNames[Math.floor(Math.random() * testNames.length)];
+            showWelcomeGreeting({
+                firstName: randomName.firstName,
+                lastInitial: randomName.lastName.charAt(0)
+            });
+        }
+        
+        function testMultipleGreetings() {
+            // Add 3 people to the queue
+            for (let i = 0; i < 3; i++) {
+                const randomName = testNames[Math.floor(Math.random() * testNames.length)];
+                showWelcomeGreeting({
+                    firstName: randomName.firstName,
+                    lastInitial: randomName.lastName.charAt(0)
+                });
+            }
+        }
+        
+        function testRapidGreetings() {
+            // Simulate 5 people joining rapidly
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    const randomName = testNames[Math.floor(Math.random() * testNames.length)];
+                    showWelcomeGreeting({
+                        firstName: randomName.firstName,
+                        lastInitial: randomName.lastName.charAt(0)
+                    });
+                }, i * 300); // 300ms apart
+            }
+        }
+    </script>
+</body>
+</html>

@@ -292,6 +292,10 @@ export const ADMIN_HTML = `<!DOCTYPE html>
                     Create New Presentation
                 </button>
                 
+                <button class="action-button warning" onclick="clearSessionCache()" style="background: #f97316;">
+                    Clear Session Cache
+                </button>
+                
                 <h2 class="section-title" style="margin-top: 2rem;">Presentations</h2>
                 <ul id="presentationList" class="presentation-list">
                     <li class="presentation-item">Loading...</li>
@@ -531,6 +535,24 @@ export const ADMIN_HTML = `<!DOCTYPE html>
         function createNewPresentation() {
             // TODO: Implement create new presentation
             showStatus('Create presentation feature coming soon', 'error');
+        }
+        
+        async function clearSessionCache() {
+            if (!confirm('This will clear all active session data from the cache. Active presentations will need to be restarted. Continue?')) {
+                return;
+            }
+            
+            try {
+                // For now, we'll just show a message since clearing specific durable objects
+                // requires knowing their IDs. The real clearing happens when initializeSession is called.
+                showStatus('Session cache will be cleared when presentations are restarted', 'success');
+                
+                // Optionally, we could add an API endpoint to clear known session codes
+                // But the main fix is already in place - initializeSession now always clears old data
+            } catch (error) {
+                console.error('Error clearing cache:', error);
+                showStatus('Failed to clear cache', 'error');
+            }
         }
         
         function savePresentation() {

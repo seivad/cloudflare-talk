@@ -104,7 +104,7 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Cloudflare Tech Talk - Live</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -139,20 +139,35 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: #fff;
-            height: 100vh;
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
             overflow: hidden;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
         }
-        .app-container { height: 100vh; display: flex; flex-direction: column; }
+        .app-container { 
+            height: 100vh;
+            height: -webkit-fill-available;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
         .main-view { 
             flex: 1; 
             padding: 1rem; 
-            padding-bottom: calc(1rem + 60px); /* Add extra padding for footer */
-            overflow-y: auto; 
+            padding-top: env(safe-area-inset-top, 1rem);
+            padding-bottom: calc(1rem + 60px + env(safe-area-inset-bottom, 0px)); /* Add extra padding for footer and safe area */
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
         }
         .slide-mirror { 
             background: rgba(255, 255, 255, 0.95);
             border-radius: 16px;
-            padding: 2rem;
+            padding: 1.2rem;
+            margin-top: 0.5rem;
             color: #333;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         }
@@ -164,7 +179,7 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
         }
         .slide-header h1 { font-size: 1.8rem; color: #c75300; }
         .slide-body { 
-            font-size: 1.1rem; 
+            font-size: 1.2rem; 
             line-height: 1.8; 
             color: #444; 
             padding: 0;
@@ -218,6 +233,7 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
             background: rgba(0, 0, 0, 0.8);
             color: white;
             padding: 1rem;
+            padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
             display: flex;
             justify-content: center;
             align-items: center;
@@ -320,12 +336,13 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
         /* Poll view styles */
         .poll-view {
             position: fixed;
-            top: 0;
+            top: env(safe-area-inset-top, 0);
             left: 0;
             right: 0;
-            bottom: 60px;
+            bottom: calc(60px + env(safe-area-inset-bottom, 0px));
             background: rgba(255, 255, 255, 0.98);
             padding: 1.5rem;
+            padding-top: calc(1.5rem + env(safe-area-inset-top, 0px));
             display: none;
             flex-direction: column;
             z-index: 100;
@@ -482,10 +499,58 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
         const roomId = '{{ROOM_ID}}';
         console.log('Audience view loaded for room:', roomId);
         
-        // Get stored participant info
-        let participantInfo = localStorage.getItem('participantInfo');
-        if (participantInfo) {
-            participantInfo = JSON.parse(participantInfo);
+        // Cookie functions
+        function getCookie(name) {
+            const value = '; ' + document.cookie;
+            const parts = value.split('; ' + name + '=');
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return null;
+        }
+        
+        function setCookie(name, value, days = 365) {
+            const date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            const expires = 'expires=' + date.toUTCString();
+            document.cookie = name + '=' + value + ';' + expires + ';path=/;SameSite=Lax';
+        }
+        
+        // Profanity filter
+        function filterProfanity(text) {
+            // Common profanity list (keeping it reasonable for a professional environment)
+            const profanityList = [
+                'fuck', 'shit', 'ass', 'bitch', 'damn', 'hell', 'crap', 'piss', 
+                'dick', 'cock', 'pussy', 'bastard', 'slut', 'whore', 'fag', 
+                'cunt', 'nigger', 'nigga', 'retard', 'gay', 'homo'
+            ];
+            
+            let filtered = text;
+            const specialChars = ['$', '@', '#', '%', '&', '*', '!', '^'];
+            
+            profanityList.forEach(word => {
+                const regex = new RegExp(word, 'gi');
+                filtered = filtered.replace(regex, (match) => {
+                    // Replace each character with a random special character
+                    return match.split('').map(() => 
+                        specialChars[Math.floor(Math.random() * specialChars.length)]
+                    ).join('');
+                });
+            });
+            
+            return filtered;
+        }
+        
+        // Get stored participant info from cookies
+        let participantInfo = null;
+        const storedFirstName = getCookie('participant_firstName');
+        const storedLastName = getCookie('participant_lastName');
+        
+        if (storedFirstName) {
+            participantInfo = {
+                firstName: storedFirstName,
+                lastName: storedLastName || '',
+                joinedAt: Date.now()
+            };
+            console.log('Loaded participant info from cookies:', participantInfo);
         }
         
         // Show name modal if not already registered
@@ -497,6 +562,14 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
         if (!participantInfo || !participantInfo.firstName) {
             // Show modal
             nameModal.style.display = 'flex';
+            
+            // Pre-fill if we have cookie data (in case of page reload)
+            if (storedFirstName) {
+                firstNameInput.value = storedFirstName;
+            }
+            if (storedLastName) {
+                lastNameInput.value = storedLastName;
+            }
         } else {
             // Hide modal if already registered
             nameModal.style.display = 'none';
@@ -504,8 +577,8 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
         
         // Handle name submission
         nameSubmitBtn.addEventListener('click', () => {
-            const firstName = firstNameInput.value.trim();
-            const lastName = lastNameInput.value.trim();
+            let firstName = firstNameInput.value.trim();
+            let lastName = lastNameInput.value.trim();
             
             if (!firstName) {
                 firstNameInput.style.borderColor = '#ff5252';
@@ -513,13 +586,20 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                 return;
             }
             
+            // Apply profanity filter to names
+            firstName = filterProfanity(firstName);
+            lastName = filterProfanity(lastName);
+            
             // Store participant info
             participantInfo = {
                 firstName,
                 lastName: lastName || '',
                 joinedAt: Date.now()
             };
-            localStorage.setItem('participantInfo', JSON.stringify(participantInfo));
+            
+            // Save to cookies
+            setCookie('participant_firstName', firstName);
+            setCookie('participant_lastName', lastName);
             
             // Hide modal
             nameModal.style.display = 'none';
@@ -642,6 +722,21 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                 }
                 if (connectionCheckInterval) {
                     clearInterval(connectionCheckInterval);
+                }
+                
+                // Always reload participant info from cookies on connection/reconnection
+                const cookieFirstName = getCookie('participant_firstName');
+                const cookieLastName = getCookie('participant_lastName');
+                if (cookieFirstName) {
+                    participantInfo = {
+                        firstName: cookieFirstName,
+                        lastName: cookieLastName || '',
+                        joinedAt: Date.now()
+                    };
+                    console.log('Loaded participant info from cookies:', participantInfo);
+                } else if (!participantInfo || !participantInfo.firstName) {
+                    // No cookies and no existing info, use anonymous
+                    participantInfo = { firstName: 'Anonymous', lastName: '' };
                 }
                 
                 // Send initial join message with participant info to get current state

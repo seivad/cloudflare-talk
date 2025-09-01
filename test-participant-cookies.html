@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Participant Cookies & Profanity Filter</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #5a67d8;
+        }
+        .output {
+            background: #f7f7f7;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: monospace;
+        }
+        .test-result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Participant Cookies & Profanity Filter</h1>
+    
+    <div class="test-section">
+        <h2>1. Cookie Functions Test</h2>
+        <div class="input-group">
+            <label>First Name:</label>
+            <input type="text" id="firstName" placeholder="Enter first name">
+        </div>
+        <div class="input-group">
+            <label>Last Name:</label>
+            <input type="text" id="lastName" placeholder="Enter last name">
+        </div>
+        <button onclick="saveToCookies()">Save to Cookies</button>
+        <button onclick="loadFromCookies()">Load from Cookies</button>
+        <button onclick="clearCookies()">Clear Cookies</button>
+        <div id="cookieOutput" class="output"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. Profanity Filter Test</h2>
+        <div class="input-group">
+            <label>Test Input (try entering profanity):</label>
+            <input type="text" id="profanityInput" placeholder="Enter text to filter">
+        </div>
+        <button onclick="testProfanityFilter()">Apply Filter</button>
+        <div id="filterOutput" class="output"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. Integration Test</h2>
+        <button onclick="runIntegrationTest()">Run Full Test</button>
+        <div id="integrationOutput" class="output"></div>
+    </div>
+
+    <script>
+        // Cookie functions (same as in the app)
+        function getCookie(name) {
+            const value = '; ' + document.cookie;
+            const parts = value.split('; ' + name + '=');
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return null;
+        }
+        
+        function setCookie(name, value, days = 365) {
+            const date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            const expires = 'expires=' + date.toUTCString();
+            document.cookie = name + '=' + value + ';' + expires + ';path=/;SameSite=Lax';
+        }
+        
+        // Profanity filter (same as in the app)
+        function filterProfanity(text) {
+            const profanityList = [
+                'fuck', 'shit', 'ass', 'bitch', 'damn', 'hell', 'crap', 'piss', 
+                'dick', 'cock', 'pussy', 'bastard', 'slut', 'whore', 'fag', 
+                'cunt', 'nigger', 'nigga', 'retard', 'gay', 'homo'
+            ];
+            
+            let filtered = text;
+            const specialChars = ['$', '@', '#', '%', '&', '*', '!', '^'];
+            
+            profanityList.forEach(word => {
+                const regex = new RegExp(word, 'gi');
+                filtered = filtered.replace(regex, (match) => {
+                    return match.split('').map(() => 
+                        specialChars[Math.floor(Math.random() * specialChars.length)]
+                    ).join('');
+                });
+            });
+            
+            return filtered;
+        }
+        
+        // Test functions
+        function saveToCookies() {
+            const firstName = document.getElementById('firstName').value;
+            const lastName = document.getElementById('lastName').value;
+            
+            if (!firstName) {
+                alert('Please enter a first name');
+                return;
+            }
+            
+            // Apply profanity filter before saving
+            const filteredFirst = filterProfanity(firstName);
+            const filteredLast = filterProfanity(lastName);
+            
+            setCookie('participant_firstName', filteredFirst);
+            setCookie('participant_lastName', filteredLast);
+            
+            document.getElementById('cookieOutput').innerHTML = 
+                '<div class="test-result success">Saved to cookies:</div>' +
+                '<pre>First Name: ' + filteredFirst + ' (original: ' + firstName + ')\n' +
+                'Last Name: ' + filteredLast + ' (original: ' + lastName + ')</pre>';
+        }
+        
+        function loadFromCookies() {
+            const firstName = getCookie('participant_firstName');
+            const lastName = getCookie('participant_lastName');
+            
+            if (firstName) {
+                document.getElementById('firstName').value = firstName;
+                document.getElementById('lastName').value = lastName || '';
+                
+                document.getElementById('cookieOutput').innerHTML = 
+                    '<div class="test-result info">Loaded from cookies:</div>' +
+                    '<pre>First Name: ' + firstName + '\n' +
+                    'Last Name: ' + (lastName || '(empty)') + '</pre>';
+            } else {
+                document.getElementById('cookieOutput').innerHTML = 
+                    '<div class="test-result info">No cookies found</div>';
+            }
+        }
+        
+        function clearCookies() {
+            setCookie('participant_firstName', '', -1);
+            setCookie('participant_lastName', '', -1);
+            
+            document.getElementById('cookieOutput').innerHTML = 
+                '<div class="test-result success">Cookies cleared</div>';
+        }
+        
+        function testProfanityFilter() {
+            const input = document.getElementById('profanityInput').value;
+            const filtered = filterProfanity(input);
+            
+            document.getElementById('filterOutput').innerHTML = 
+                '<div class="test-result info">Filter Result:</div>' +
+                '<pre>Original: ' + input + '\n' +
+                'Filtered: ' + filtered + '</pre>';
+        }
+        
+        function runIntegrationTest() {
+            const testCases = [
+                { first: 'John', last: 'Doe', expected: 'Normal names' },
+                { first: 'Shit', last: 'Face', expected: 'Profanity filtered' },
+                { first: 'FuckJohn', last: 'AssSmith', expected: 'Mixed profanity' },
+                { first: 'FUCK', last: 'SHIT', expected: 'Uppercase profanity' }
+            ];
+            
+            let output = '<div class="test-result info">Running integration tests...</div><pre>';
+            
+            testCases.forEach((test, index) => {
+                const filteredFirst = filterProfanity(test.first);
+                const filteredLast = filterProfanity(test.last);
+                
+                output += `\nTest ${index + 1} (${test.expected}):\n`;
+                output += `  Input: ${test.first} ${test.last}\n`;
+                output += `  Output: ${filteredFirst} ${filteredLast}\n`;
+                
+                // Save to cookies
+                setCookie('test_first_' + index, filteredFirst);
+                setCookie('test_last_' + index, filteredLast);
+                
+                // Load from cookies
+                const loadedFirst = getCookie('test_first_' + index);
+                const loadedLast = getCookie('test_last_' + index);
+                
+                output += `  Cookie roundtrip: ${loadedFirst} ${loadedLast}\n`;
+                output += `  Status: ${loadedFirst === filteredFirst ? '✅ PASS' : '❌ FAIL'}\n`;
+            });
+            
+            output += '</pre>';
+            document.getElementById('integrationOutput').innerHTML = output;
+        }
+        
+        // Load any existing cookies on page load
+        window.onload = function() {
+            loadFromCookies();
+        };
+    </script>
+</body>
+</html>

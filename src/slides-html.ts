@@ -224,7 +224,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
 
         .slide ul {
             list-style: none;
-            font-size: 1.8rem;
+            font-size: 2rem;
             line-height: 2.2;
             color: #555;
             padding-left: 0;
@@ -406,11 +406,18 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             if (!roomId) {
                 roomId = Math.floor(100000 + Math.random() * 900000).toString();
                 localStorage.setItem('presentationRoomId', roomId);
+                console.log('📍 Generated new room ID:', roomId);
+            } else {
+                console.log('📍 Using room ID from localStorage:', roomId);
             }
         } else {
             // Store the session code for consistency
             localStorage.setItem('presentationRoomId', roomId);
+            console.log('📍 Using room ID from URL:', roomId);
         }
+        
+        console.log('🔗 This presenter window is connected to room:', roomId);
+        console.log('🔗 Audience members should join:', window.location.origin + '/audience/' + roomId);
         
         const AUDIENCE_URL = window.location.origin + '/audience/' + roomId;
         let currentSlideIndex = 0;
@@ -566,7 +573,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                             '</div>' +
                             '<div style="text-align: left;">' +
                                 '<h3 style="color: #c75300; font-size: 2.2rem; margin-bottom: 1.5rem; text-align: left;">Connect with me</h3>' +
-                                '<div style="display: flex; flex-direction: column; gap: 1rem; font-size: 1.4rem;">' +
+                                '<div style="display: flex; flex-direction: column; gap: 1rem; font-size: 2rem;">' +
                                     '<div style="display: flex; align-items: center; gap: 1rem;"><span style="font-size: 1.8rem;">𝕏</span><a href="https://x.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
                                     '<div style="display: flex; align-items: center; gap: 1rem;"><span style="font-size: 1.8rem;">📷</span><a href="https://instagram.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
                                     '<div style="display: flex; align-items: center; gap: 1rem;"><span style="font-size: 1.8rem;">💼</span><a href="https://linkedin.com/in/mickdaviesaus" target="_blank" style="color: #333; text-decoration: none;">mickdaviesaus</a></div>' +
@@ -726,6 +733,13 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                 // Send join message
                 ws.send(JSON.stringify({ type: 'join', roomId: roomId, isPresenter: true }));
                 
+                // Request participant list
+                setTimeout(() => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'requestParticipantList' }));
+                    }
+                }, 500);
+                
                 // Send heartbeat every 10 seconds with pong monitoring
                 heartbeatInterval = setInterval(() => {
                     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -798,6 +812,60 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                     }
                     break;
                 
+                case 'participantJoined':
+                    if (data.data) {
+                        // Add to participants map
+                        const participantId = data.data.timestamp + '_' + Math.random();
+                        connectedParticipants.set(participantId, {
+                            firstName: data.data.firstName,
+                            lastName: data.data.lastName,
+                            lastInitial: data.data.lastInitial,
+                            joinedAt: data.data.timestamp
+                        });
+                        
+                        // Show greeting
+                        showWelcomeGreeting(data.data);
+                    }
+                    break;
+                    
+                case 'participantLeft':
+                    // Participant disconnected - remove from our map
+                    if (data.data) {
+                        // Find and remove the participant
+                        const nameToRemove = data.data.firstName + '_' + (data.data.lastInitial || '');
+                        for (const [key, participant] of connectedParticipants.entries()) {
+                            const participantName = participant.firstName + '_' + (participant.lastInitial || '');
+                            if (participantName === nameToRemove) {
+                                connectedParticipants.delete(key);
+                                console.log('Participant left:', data.data.firstName);
+                                break;
+                            }
+                        }
+                        
+                        // Update the display if the list is open
+                        updateAudienceListDisplay();
+                    }
+                    break;
+                    
+                case 'participantList':
+                    if (data.data && data.data.participants) {
+                        // Clear and rebuild participant map with server data
+                        connectedParticipants.clear();
+                        data.data.participants.forEach((p, index) => {
+                            connectedParticipants.set('server_' + index, {
+                                firstName: p.firstName,
+                                lastName: p.lastName,
+                                lastInitial: p.lastInitial,
+                                joinedAt: Date.now()
+                            });
+                        });
+                        console.log('Updated participant list from server:', data.data.count, 'participants');
+                        
+                        // If the audience list is open, update it WITHOUT requesting new data
+                        updateAudienceListDisplay();
+                    }
+                    break;
+                
                 case 'slideChanged':
                     if (data.data) {
                         if (data.data.index !== undefined) {
@@ -844,6 +912,12 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                 case 'allWinnersSelected':
                     // All participants have won
                     showAllWinnersMessage(data.data);
+                    break;
+                    
+                case 'noParticipants':
+                    // No participants available
+                    console.log('⚠️ No participants available:', data.data.message);
+                    showNoParticipantsMessage();
                     break;
                     
                 case 'presentationLoaded':
@@ -948,7 +1022,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                         '</div>' +
                         '<div style="text-align: left;">' +
                             '<h3 style="color: #c75300; font-size: 2.2rem; margin-bottom: 1.5rem; text-align: left;">Connect with me</h3>' +
-                            '<div style="display: flex; flex-direction: column; gap: 1rem; font-size: 1.4rem;">' +
+                            '<div style="display: flex; flex-direction: column; gap: 1rem; font-size: 2rem;">' +
                                 '<div style="display: flex; align-items: center; gap: 1rem;"><i class="fab fa-x-twitter" style="font-size: 1.6rem; width: 2rem; color: #333;"></i><a href="https://x.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
                                 '<div style="display: flex; align-items: center; gap: 1rem;"><i class="fab fa-instagram" style="font-size: 1.6rem; width: 2rem; color: #E4405F;"></i><a href="https://instagram.com/_mickdavies" target="_blank" style="color: #333; text-decoration: none;">@_mickdavies</a></div>' +
                                 '<div style="display: flex; align-items: center; gap: 1rem;"><i class="fab fa-linkedin" style="font-size: 1.6rem; width: 2rem; color: #0077B5;"></i><a href="https://linkedin.com/in/mickdaviesaus" target="_blank" style="color: #333; text-decoration: none;">mickdaviesaus</a></div>' +
@@ -988,7 +1062,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                                 p.style.color = '#333';
                             } else {
                                 // Match audience view styling
-                                p.style.fontSize = '1.4rem';
+                                p.style.fontSize = '2rem';
                                 p.style.marginBottom = '1rem';
                                 p.style.fontWeight = 'bold';
                                 p.style.lineHeight = '1.4';
@@ -1045,7 +1119,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                                 p.style.color = '#333';
                             } else {
                                 // Match audience view styling
-                                p.style.fontSize = '1.4rem';
+                                p.style.fontSize = '2rem';
                                 p.style.marginBottom = '1rem';
                                 p.style.fontWeight = 'bold';
                                 p.style.lineHeight = '1.4';
@@ -1103,6 +1177,11 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                         e.preventDefault();
                         pickPrizeWinner();
                         break;
+                    case 'a':
+                    case 'A':
+                        e.preventDefault();
+                        showAudienceList();
+                        break;
                     case '1':
                         e.preventDefault();
                         pickOption(1);
@@ -1155,6 +1234,13 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             
             // Check if current slide has poll data
             const currentSlide = window.currentSlideData;
+            
+            // First check if this is a poll slide type
+            if (!currentSlide || (currentSlide.slideType !== 'poll' && currentSlide.slide_type !== 'poll')) {
+                console.log('Current slide is not a poll slide. Type:', currentSlide?.slideType || currentSlide?.slide_type);
+                return;
+            }
+            
             if (currentSlide && currentSlide.pollQuestion && currentSlide.pollOptions) {
                 console.log('Using poll from current slide');
                 
@@ -1468,6 +1554,207 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             }
         }
         
+        // Participant tracking for audience list
+        const connectedParticipants = new Map();
+        
+        // Greeting system for participants
+        const greetingQueue = [];
+        let isShowingGreeting = false;
+        
+        const greetingMessages = [
+            'Hey {name}!',
+            'Welcome {name}!',
+            'What\\'s up {name}',
+            'Hello {name}!',
+            'Good to see you {name}',
+            'Glad you\\'re here {name}',
+            'Thanks for joining {name}',
+            'Greetings {name}!',
+            'Hi there {name}',
+            'Welcome back {name}!',
+            '{name} has joined!',
+            'Great to have you {name}'
+        ];
+        
+        function getRandomGreeting(firstName, lastInitial) {
+            const greeting = greetingMessages[Math.floor(Math.random() * greetingMessages.length)];
+            const name = lastInitial ? firstName + ' ' + lastInitial + '.' : firstName;
+            return greeting.replace('{name}', name);
+        }
+        
+        function showWelcomeGreeting(participant) {
+            // Add to queue
+            greetingQueue.push(participant);
+            
+            // If not currently showing a greeting, start processing the queue
+            if (!isShowingGreeting) {
+                processGreetingQueue();
+            }
+        }
+        
+        function processGreetingQueue() {
+            if (greetingQueue.length === 0) {
+                isShowingGreeting = false;
+                return;
+            }
+            
+            isShowingGreeting = true;
+            const participant = greetingQueue.shift();
+            
+            // Create greeting element
+            const greetingDiv = document.createElement('div');
+            greetingDiv.style.cssText = 
+                'position: fixed;' +
+                'bottom: 70px;' +
+                'left: 120px;' +
+                'background: rgba(0, 0, 0, 0.8);' +
+                'color: white;' +
+                'padding: 12px 20px;' +
+                'border-radius: 25px;' +
+                'font-size: 18px;' +
+                'font-weight: 500;' +
+                'z-index: 1000;' +
+                'backdrop-filter: blur(10px);' +
+                'animation: slideInLeft 0.5s ease-out;' +
+                'box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);';
+            
+            greetingDiv.textContent = getRandomGreeting(participant.firstName, participant.lastInitial);
+            
+            // Add animation styles if not already added
+            if (!document.getElementById('greetingAnimations')) {
+                const style = document.createElement('style');
+                style.id = 'greetingAnimations';
+                style.textContent = 
+                    '@keyframes slideInLeft {' +
+                    '  from {' +
+                    '    opacity: 0;' +
+                    '    transform: translateX(-50px);' +
+                    '  }' +
+                    '  to {' +
+                    '    opacity: 1;' +
+                    '    transform: translateX(0);' +
+                    '  }' +
+                    '}' +
+                    '@keyframes fadeOut {' +
+                    '  from {' +
+                    '    opacity: 1;' +
+                    '  }' +
+                    '  to {' +
+                    '    opacity: 0;' +
+                    '    transform: translateY(10px);' +
+                    '  }' +
+                    '}';
+                document.head.appendChild(style);
+            }
+            
+            document.body.appendChild(greetingDiv);
+            
+            // Remove after 2.5 seconds with fade out
+            setTimeout(() => {
+                greetingDiv.style.animation = 'fadeOut 0.5s ease-out';
+                setTimeout(() => {
+                    greetingDiv.remove();
+                    // Process next in queue after a small delay
+                    setTimeout(() => processGreetingQueue(), 200);
+                }, 500);
+            }, 2500);
+        }
+        
+        function renderAudienceList(overlay) {
+            // Build participant list HTML - deduplicate by name
+            const participantsMap = new Map();
+            Array.from(connectedParticipants.values()).forEach(participant => {
+                const key = participant.firstName + '_' + (participant.lastInitial || '');
+                // Keep the first occurrence of each unique name
+                if (!participantsMap.has(key)) {
+                    participantsMap.set(key, participant);
+                }
+            });
+            
+            const participants = Array.from(participantsMap.values()).sort((a, b) => {
+                // Sort by first name
+                return a.firstName.localeCompare(b.firstName);
+            });
+            
+            let listHTML = '<div style="padding: 3rem; height: 100%; display: flex; flex-direction: column;">';
+            listHTML += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">';
+            listHTML += '<h1 style="font-size: 3rem; color: white; margin: 0;">👥 Audience Members (' + participants.length + ')</h1>';
+            listHTML += '<div style="font-size: 1.2rem; color: #ccc;">Press ESC to close</div>';
+            listHTML += '</div>';
+            
+            // Create scrollable two-column list
+            listHTML += '<div style="flex: 1; overflow-y: auto; background: rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 2rem;">';
+            
+            if (participants.length === 0) {
+                listHTML += '<div style="text-align: center; color: #999; font-size: 1.5rem; padding: 3rem;">No participants have joined yet</div>';
+            } else {
+                listHTML += '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; max-width: 1200px; margin: 0 auto;">';
+                
+                participants.forEach((participant, index) => {
+                    const fullName = participant.lastInitial ? 
+                        participant.firstName + ' ' + participant.lastInitial + '.' : 
+                        participant.firstName;
+                    
+                    listHTML += '<div style="background: rgba(255, 255, 255, 0.1); padding: 1rem 1.5rem; border-radius: 8px; display: flex; align-items: center; gap: 1rem;">';
+                    listHTML += '<div style="font-size: 1.5rem; opacity: 0.5;">' + (index + 1) + '.</div>';
+                    listHTML += '<div style="font-size: 1.3rem; color: white; flex: 1;">' + fullName + '</div>';
+                    listHTML += '</div>';
+                });
+                
+                listHTML += '</div>';
+            }
+            
+            listHTML += '</div>';
+            listHTML += '</div>';
+            
+            overlay.innerHTML = listHTML;
+            overlay.style.display = 'block';
+        }
+        
+        function updateAudienceListDisplay() {
+            // Update the display WITHOUT requesting new data
+            const overlay = document.getElementById('audienceListOverlay');
+            if (!overlay || overlay.style.display === 'none') return;
+            
+            renderAudienceList(overlay);
+        }
+        
+        function showAudienceList() {
+            console.log('👥 Showing audience list...');
+            
+            // Get or create overlay
+            let overlay = document.getElementById('audienceListOverlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'audienceListOverlay';
+                overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: none; z-index: 9999; background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(10px);';
+                document.body.appendChild(overlay);
+            }
+            
+            // Render the list
+            renderAudienceList(overlay);
+            
+            // Handle ESC key
+            const closeList = (e) => {
+                if (e && e.key && e.key !== 'Escape' && e.key !== 'Esc') {
+                    return;
+                }
+                overlay.style.display = 'none';
+                overlay.innerHTML = '';
+                document.removeEventListener('keydown', closeList, true);
+            };
+            
+            // Use capture phase
+            document.addEventListener('keydown', closeList, true);
+            
+            // Request fresh participant list from server ONCE
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'requestParticipantList'
+                }));
+            }
+        }
+        
         function pickPrizeWinner() {
             console.log('🎁 Picking a prize winner from participants...');
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -1478,6 +1765,46 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         }
         
         // Confetti removed - using emojis for celebration instead
+        
+        function showNoParticipantsMessage() {
+            console.log('⚠️ No participants available for prize selection');
+            
+            // Get or create overlay
+            let overlay = document.getElementById('pollOverlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'pollOverlay';
+                overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: none; z-index: 9999;';
+                overlay.className = 'poll-overlay';
+                document.body.appendChild(overlay);
+            }
+            overlay.innerHTML = '<div style="text-align: center; padding: 3rem;">' +
+                '<div style="font-size: 5rem; margin-bottom: 2rem;">📱</div>' +
+                '<h1 style="font-size: 3rem; color: white; margin-bottom: 2rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">No Participants Yet</h1>' +
+                '<div style="font-size: 1.8rem; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">Make sure audience members have joined from their phones</div>' +
+                '<div style="margin-top: 2rem; font-size: 1.4rem; color: #ffd700;">Ask them to visit the audience URL and enter their names</div>' +
+                '<div style="margin-top: 3rem; font-size: 1.2rem; color: #ccc;">Press ESC to close</div>' +
+                '</div>';
+            overlay.style.display = 'flex';
+            overlay.style.alignItems = 'center';
+            overlay.style.justifyContent = 'center';
+            overlay.style.background = 'linear-gradient(135deg, rgba(249,115,22,0.95) 0%, rgba(239,68,68,0.95) 100%)';
+            
+            // Handle ESC key
+            const hideMessage = (e) => {
+                if (e && e.key && e.key !== 'Escape' && e.key !== 'Esc') {
+                    return;
+                }
+                overlay.style.display = 'none';
+                overlay.innerHTML = '';
+                document.removeEventListener('keydown', hideMessage, true);
+            };
+            
+            document.addEventListener('keydown', hideMessage, true);
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => hideMessage(), 5000);
+        }
         
         function showAllWinnersMessage(data) {
             console.log('🎊 All participants have won prizes!');

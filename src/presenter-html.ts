@@ -343,6 +343,11 @@ export const PRESENTER_HTML = `<!DOCTYPE html>
         <div class="header">
             <h1>🚀 Presenter Dashboard</h1>
             <p>Start a new presentation session</p>
+            <div style="margin-top: 1rem;">
+                <a href="/testing" style="display: inline-block; padding: 0.5rem 1rem; background: rgba(255, 255, 255, 0.2); color: white; text-decoration: none; border-radius: 8px; font-size: 0.9rem; transition: background 0.3s;">
+                    🧪 Testing Tools
+                </a>
+            </div>
         </div>
         
         <div id="presentationsContainer" class="presentations-grid">
@@ -458,15 +463,12 @@ export const PRESENTER_HTML = `<!DOCTYPE html>
                         <span class="slide-count">\${pres.slide_count || 0} slides</span>
                         <span>\${pres.pin_code ? '🔒 PIN Protected' : '🔓 No PIN'}</span>
                     </div>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="start-button" style="flex: 1" onclick="startSession('\${pres.id}', \${pres.pin_code ? 'true' : 'false'})">
+                    <div style="display: flex; gap: 1rem;">
+                        <button class="start-button" style="width: 50%" onclick="startSession('\${pres.id}', \${pres.pin_code ? 'true' : 'false'})">
                             Start Talk
                         </button>
-                        <button class="start-button" style="flex: 1; background: #667eea;" onclick="window.location.href='/presenter/\${pres.id}/edit'">
+                        <button class="start-button" style="width: 50%; background: #667eea;" onclick="window.location.href='/presenter/\${pres.id}/edit'">
                             Edit
-                        </button>
-                        <button class="start-button" style="flex: 1; background: #764ba2;" onclick="window.location.href='/presenter/\${pres.id}/slides'">
-                            Manage Slides
                         </button>
                     </div>
                 </div>
