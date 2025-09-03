@@ -84,13 +84,13 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         }
         
         .slide-content-wrapper {
-            flex: 0 0 50%;
+            flex: 0 0 60%;
             display: flex;
             flex-direction: column;
         }
         
         .slide-media-wrapper {
-            flex: 0 0 50%;
+            flex: 0 0 40%;
             display: flex;
             gap: 2rem;
             align-items: flex-start;
