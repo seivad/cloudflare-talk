@@ -305,22 +305,34 @@ export async function deleteSlide(
       return false;
     }
     
-    // First, temporarily set the slide's order_number to a very high value to avoid conflicts
-    await db.prepare(
-      'UPDATE slides SET order_number = 999999 WHERE id = ?'
-    ).bind(slideId).run();
+    // Use a transaction to ensure atomicity
+    const statements = [];
     
-    // Then reorder remaining slides
-    const reorderResult = await db.prepare(
-      `UPDATE slides 
-       SET order_number = order_number - 1 
-       WHERE presentation_id = ? AND order_number > ?`
-    ).bind(slide.presentation_id, slide.order_number).run();
-    console.log(`Reordered ${reorderResult.meta.changes} slides`);
+    // Delete the slide first
+    statements.push(
+      db.prepare('DELETE FROM slides WHERE id = ?').bind(slideId)
+    );
     
-    // Finally, delete the slide
-    const deleteResult = await db.prepare('DELETE FROM slides WHERE id = ?').bind(slideId).run();
-    console.log(`Delete result:`, deleteResult.meta);
+    // Get all slides that need reordering
+    const slidesToReorder = await db.prepare(
+      `SELECT id, order_number FROM slides 
+       WHERE presentation_id = ? AND order_number > ? 
+       ORDER BY order_number`
+    ).bind(slide.presentation_id, slide.order_number).all();
+    
+    // Reorder each slide individually to avoid constraint violations
+    let newOrder = slide.order_number;
+    for (const slideToReorder of slidesToReorder.results) {
+      statements.push(
+        db.prepare('UPDATE slides SET order_number = ? WHERE id = ?')
+          .bind(newOrder, slideToReorder.id)
+      );
+      newOrder++;
+    }
+    
+    // Execute all statements in a batch
+    const results = await db.batch(statements);
+    console.log(`Deleted slide and reordered ${slidesToReorder.results.length} slides`);
     
     return true;
   } catch (error) {
