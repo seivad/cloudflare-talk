@@ -60,7 +60,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             display: flex;
             align-items: start;
             justify-content: center;
-            padding: 8rem 3rem 0;
+            padding: 6rem 2rem 0;
         }
 
         .slide {
