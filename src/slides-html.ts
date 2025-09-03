@@ -458,134 +458,8 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         let pollTimer = null;
         let pollVotes = {};
 
-        // Slide data array - this should match the data in SlideRoom.ts
-        const slideData = [
-            {
-                title: 'Welcome to the Edge! ⚡',
-                content: ['Cloudflare Workers: Choose Your Own Adventure'],
-                bullets: []
-            },
-            {
-                title: 'Workers: Baristas Everywhere ⚡',
-                content: ['Tiny, serverless functions that run everywhere.'],
-                bullets: [
-                    'Cold starts? Basically non-existent',
-                    'No servers to manage - focus on code',
-                    'Runs within 50ms of your users'
-                ]
-            },
-            {
-                title: 'Durable Objects: Perfect Memory 🎯',
-                content: ['Remembers everything across the globe.'],
-                bullets: [
-                    'Single source of truth',
-                    'WebSocket coordination',
-                    'State that survives',
-                    'Perfect for: real-time games, collaboration'
-                ]
-            },
-            {
-                title: 'D1: Your Lightweight Database 💾',
-                content: ['SQLite-compatible at the edge'],
-                bullets: [
-                    'Perfect for smaller, quick queries',
-                    'Read replicas globally distributed',
-                    'Automatic backups'
-                ]
-            },
-            {
-                title: 'Queues: Your Traffic Manager 🚦',
-                content: ['Only lets in the right number of people'],
-                bullets: [
-                    'Smooth traffic spikes',
-                    'Automatic retries',
-                    'Dead letter queues',
-                    'Batch processing'
-                ]
-            },
-            {
-                title: 'R2: Zero Egress Storage 🗄️',
-                content: ['Your own attic - grab anything free!'],
-                bullets: [
-                    'S3-compatible API',
-                    'ZERO egress fees',
-                    'Automatic replication',
-                    'Perfect for: images, backups, datasets'
-                ]
-            },
-            {
-                title: 'AI: Your Smart Neighbor 🤖',
-                content: ['Smart neighbor next door - Instant feedback!'],
-                bullets: [
-                    'Run inference close to users',
-                    'Low latency responses',
-                    'Multiple model support',
-                    'Pay per inference'
-                ]
-            },
-            {
-                title: 'Workflows: Your Process Orchestra 🎭',
-                content: ['Orchestrate complex, long-running processes with ease'],
-                bullets: [
-                    'Built-in retries and error handling',
-                    'Durable execution across restarts',
-                    'Human-in-the-loop approvals',
-                    'Perfect for: ETL, batch jobs, multi-step APIs'
-                ]
-            },
-            {
-                title: 'Containers: Bring Your Own Runtime 📦',
-                content: ['Run any Docker container at the edge'],
-                bullets: [
-                    'Full compatibility with existing containers',
-                    'GPU support for ML workloads',
-                    'Seamless integration with Workers',
-                    'Perfect for: legacy apps, custom runtimes'
-                ]
-            },
-            {
-                title: 'Load Balancers: Traffic Control Tower 🎮',
-                content: ['Intelligent traffic distribution across the globe'],
-                bullets: [
-                    'Health checks and failover',
-                    'Geographic steering',
-                    'Session affinity',
-                    'Perfect for: multi-region apps, zero downtime'
-                ]
-            },
-            {
-                title: 'AI Models: Your Brain Trust 🧠',
-                content: ['Pre-trained models ready to use instantly'],
-                bullets: [
-                    'LLMs, image generation, embeddings',
-                    'No infrastructure to manage',
-                    'Pay per inference, not idle time',
-                    'Perfect for: chat, vision, translation'
-                ]
-            },
-            {
-                title: 'AI Agents: Your Digital Workforce 🤖',
-                content: ['Autonomous agents that think and act'],
-                bullets: [
-                    'Tool calling and function execution',
-                    'Multi-step reasoning',
-                    'Context-aware responses',
-                    'Perfect for: automation, support, analysis'
-                ]
-            },
-            {
-                title: 'Thanks for Joining! 🙏',
-                content: ['Connect with me'],
-                bullets: [],
-                isBioSlide: true
-            }
-        ];
-
-        function generateSlides() {
-            const slideContent = document.getElementById('slideContent');
-            slideContent.innerHTML = '';
-            
-            slideData.forEach((slide, index) => {
+        // Slides will be loaded dynamically from server
+        // No hard-coded slides to prevent flicker
                 const slideDiv = document.createElement('div');
                 slideDiv.className = 'slide' + (index === 0 ? ' active' : '');
                 slideDiv.setAttribute('data-index', index.toString());
@@ -682,7 +556,8 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             // Display room ID (session code)
             document.getElementById('roomIdDisplay').textContent = roomId;
             
-            slides = generateSlides();
+            // Initialize slides as empty - will be loaded from server
+            slides = document.querySelectorAll('.slide');
             generateQRCode();
             connectWebSocket();
             setupKeyboardControls();
