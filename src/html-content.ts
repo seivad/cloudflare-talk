@@ -833,6 +833,7 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                                     '<h1 class="bio-heading">Thanks for Joining! 🙏</h1>' +
                                     '<img src="/photo.jpg" alt="Mick Davies" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid #c75300; box-shadow: 0 4px 20px rgba(199, 83, 0, 0.3);">' +
                                     '<h2 style="color: #333; margin: 0; font-size: 1.8rem;">Mick Davies</h2>' +
+                                    '<p style="color: #888; font-size: 0.9rem; margin: 0.5rem 0 0 0; font-weight: 300;">Available for hire, training & development</p>' +
                                     '<div style="margin-top: 1.5rem;">' +
                                     '<h3 style="color: #c75300; font-size: 1.4rem; margin-bottom: 1rem; text-align: left;">Connect with me</h3>' +
                                     '<div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 1rem; text-align: left;">' +
@@ -931,6 +932,7 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                                     '<h1 class="bio-heading">Thanks for Joining! 🙏</h1>' +
                                     '<img src="/photo.jpg" alt="Mick Davies" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid #c75300; box-shadow: 0 4px 20px rgba(199, 83, 0, 0.3);">' +
                                     '<h2 style="color: #333; margin: 0; font-size: 1.8rem;">Mick Davies</h2>' +
+                                    '<p style="color: #888; font-size: 0.9rem; margin: 0.5rem 0 0 0; font-weight: 300;">Available for hire, training & development</p>' +
                                     '<div style="margin-top: 1.5rem;">' +
                                     '<h3 style="color: #c75300; font-size: 1.4rem; margin-bottom: 1rem; text-align: left;">Connect with me</h3>' +
                                     '<div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 1rem; text-align: left;">' +

@@ -902,7 +902,8 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                         '<div style="text-align: center;">' +
                             '<img src="/photo.jpg" alt="Mick Davies" style="width: 200px; height: 200px; border-radius: 50%; object-fit: cover; border: 4px solid #c75300; box-shadow: 0 8px 32px rgba(199, 83, 0, 0.3); margin-bottom: 2rem;">' +
                             '<h1 class="bio-heading">Thanks for Joining! 🙏</h1>' +
-                            '<h2 style="color: #333; margin-bottom: 2rem; font-size: 2.5rem;">Mick Davies</h2>' +
+                            '<h2 style="color: #333; margin-bottom: 0.5rem; font-size: 2.5rem;">Mick Davies</h2>' +
+                            '<p style="color: #888; font-size: 1.2rem; margin-bottom: 1.5rem; font-weight: 300;">Available for hire, training & development</p>' +
                         '</div>' +
                         '<div style="text-align: left;">' +
                             '<h3 style="color: #c75300; font-size: 2.2rem; margin-bottom: 1.5rem; text-align: left;">Connect with me</h3>' +
