@@ -256,7 +256,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         .slide ul {
             list-style: none;
             font-size: 2rem;
-            line-height: 2.2;
+            line-height: 1.6;
             color: #555;
             padding-left: 0;
         }
