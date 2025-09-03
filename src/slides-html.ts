@@ -121,7 +121,6 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             width: 100%;
             aspect-ratio: 1;
             background: white;
-            padding: 1rem;
             border-radius: 12px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         }
@@ -1206,12 +1205,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                     const audienceUrl = \`\${window.location.origin}/audience/\${roomId}\`;
                     qrImg.src = \`/qr/\${encodeURIComponent(audienceUrl)}?size=400\`;
                     
-                    const qrLabel = document.createElement('div');
-                    qrLabel.className = 'qr-label';
-                    qrLabel.textContent = 'Scan to Join';
-                    
                     qrContainer.appendChild(qrImg);
-                    qrContainer.appendChild(qrLabel);
                     
                     // Add both to media wrapper
                     mediaWrapper.appendChild(gifContainer);
