@@ -821,13 +821,12 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             // Hide main QR container for slides with GIFs (they have their own QR) and initial slides
             const mainQR = document.getElementById('mainQRContainer');
             if (mainQR) {
-                const isInitialSlide = currentSlideIndex === 0;
-                const currentSlideData = slideData[currentSlideIndex];
-                const hasGif = currentSlideData && currentSlideData.gif;
+                // We'll handle QR visibility when we receive slide data from server
+                // For now, just check if current slide has the with-gif class
+                const activeSlide = document.querySelector('.slide.active');
+                const hasGif = activeSlide && activeSlide.classList.contains('with-gif');
                 
-                // Hide QR for slides with GIF (they have side-by-side QR), initial slides with their own QR, or bio slides
-                const isBioSlide = currentSlideData && currentSlideData.isBioSlide;
-                if (hasGif || (isInitialSlide && !currentSlideData?.isBioSlide) || isBioSlide) {
+                if (hasGif) {
                     mainQR.style.display = 'none';
                 } else {
                     mainQR.style.display = 'block';
