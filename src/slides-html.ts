@@ -79,7 +79,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         
         .slide.with-gif.active {
             display: flex !important;
-            gap: 4rem;
+            gap: 1rem;
             align-items: stretch;
         }
         
