@@ -94,7 +94,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             display: flex;
             gap: 2rem;
             align-items: flex-start;
-            justify-content: center;
+            justify-content: start;
         }
         
         .slide-gif-container {
@@ -110,7 +110,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         
         .slide-qr-container {
             flex: 1;
-            max-width: 280px;
+            max-width: 350px;
             display: flex;
             flex-direction: column;
             align-items: center;
