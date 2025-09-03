@@ -351,6 +351,16 @@ export const SLIDE_MANAGER_HTML = `<!DOCTYPE html>
             gap: 0.5rem;
         }
         
+        .ai-poll-option-fields {
+            width: 100%;
+        }
+        
+        .ai-poll-option-fields input.form-control,
+        .ai-poll-option-fields textarea.form-control {
+            width: 100% !important;
+            box-sizing: border-box;
+        }
+        
         .route-warning {
             background: #fef2f2;
             color: #991b1b;
@@ -518,6 +528,7 @@ export const SLIDE_MANAGER_HTML = `<!DOCTYPE html>
                         <option value="bio">Bio</option>
                         <option value="standard">Standard</option>
                         <option value="poll">Poll</option>
+                        <option value="ai_poll">AI Poll</option>
                     </select>
                 </div>
                 
@@ -562,6 +573,20 @@ export const SLIDE_MANAGER_HTML = `<!DOCTYPE html>
                         <div class="poll-options-container" id="pollOptionsContainer"></div>
                         <button class="add-item-btn" onclick="addPollOption()">
                             <i class="fas fa-plus"></i> Add Poll Option
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- AI Poll-specific fields -->
+                <div id="aiPollFields" style="display: none;">
+                    <div class="form-group">
+                        <label>AI Poll Options</label>
+                        <div class="info-text" style="margin-bottom: 1rem; color: #666; font-size: 0.9rem;">
+                            <i class="fas fa-info-circle"></i> Configure options for AI-generated content. Each option will show the "Key" to users and use the "Value" as the AI prompt.
+                        </div>
+                        <div class="poll-options-container" id="aiPollOptionsContainer"></div>
+                        <button class="add-item-btn" onclick="addAIPollOption()">
+                            <i class="fas fa-plus"></i> Add AI Poll Option
                         </button>
                     </div>
                 </div>
@@ -885,6 +910,11 @@ export const SLIDE_MANAGER_HTML = `<!DOCTYPE html>
                 loadPollOptions(currentEditSlide.poll_options, currentEditSlide.poll_routes);
             }
             
+            // Load AI poll data
+            if (currentEditSlide.slide_type === 'ai_poll' && currentEditSlide.ai_poll_prompts) {
+                loadAIPollOptions(currentEditSlide.ai_poll_prompts);
+            }
+            
             handleSlideTypeChange();
             checkRouteDependencies();
             document.getElementById('editSlideModal').classList.add('active');
@@ -942,6 +972,7 @@ export const SLIDE_MANAGER_HTML = `<!DOCTYPE html>
         function handleSlideTypeChange() {
             const slideType = document.getElementById('slideType').value;
             document.getElementById('pollFields').style.display = slideType === 'poll' ? 'block' : 'none';
+            document.getElementById('aiPollFields').style.display = slideType === 'ai_poll' ? 'block' : 'none';
         }
         
         function loadPollOptions(optionsJson, routesJson) {
@@ -1028,6 +1059,102 @@ export const SLIDE_MANAGER_HTML = `<!DOCTYPE html>
             };
         }
         
+        // AI Poll Functions
+        function addAIPollOption() {
+            const option = {
+                id: 'ai_opt_' + Date.now(),
+                key: '',
+                value: '',
+                type: 'image',
+                model: ''
+            };
+            addAIPollOptionElement(option);
+        }
+        
+        function addAIPollOptionElement(option) {
+            const container = document.getElementById('aiPollOptionsContainer');
+            const optionDiv = document.createElement('div');
+            optionDiv.className = 'poll-option-item';
+            optionDiv.dataset.optionId = option.id;
+            optionDiv.style.marginBottom = '1.5rem';
+            optionDiv.style.padding = '1rem';
+            optionDiv.style.background = '#f8f9fa';
+            optionDiv.style.borderRadius = '8px';
+            
+            optionDiv.innerHTML = \`
+                <div class="poll-option-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <select class="form-control select" data-field="type" style="width: 120px; margin: 0;">
+                            <option value="image" \${option.type === 'image' ? 'selected' : ''}>🎨 Image</option>
+                            <option value="text" \${option.type === 'text' ? 'selected' : ''}>📝 Text</option>
+                        </select>
+                        <strong style="font-size: 0.95rem;">AI Option</strong>
+                    </div>
+                    <button class="btn btn-danger btn-sm" onclick="this.closest('.poll-option-item').remove()">
+                        <i class="fas fa-times"></i> Remove
+                    </button>
+                </div>
+                <div class="ai-poll-option-fields">
+                    <input type="text" class="form-control" placeholder="Display Key (shown to users)" value="\${escapeHtml(option.key || '')}" data-field="key" />
+                    <textarea class="form-control" placeholder="AI Prompt (what the AI will receive)" rows="3" data-field="value" style="resize: vertical; margin-top: 0.75rem;">\${escapeHtml(option.value || '')}</textarea>
+                    <input type="hidden" data-field="model" value="@cf/openai/gpt-oss-120b" />
+                </div>
+            \`;
+            
+            container.appendChild(optionDiv);
+        }
+        
+        function loadAIPollOptions(promptsJson) {
+            const container = document.getElementById('aiPollOptionsContainer');
+            container.innerHTML = '';
+            
+            if (!promptsJson) return;
+            
+            try {
+                // Handle double-encoded JSON (if data was accidentally stringified twice)
+                let prompts = promptsJson;
+                if (typeof prompts === 'string') {
+                    prompts = JSON.parse(prompts);
+                    // Check if it's still a string (double-encoded)
+                    if (typeof prompts === 'string') {
+                        prompts = JSON.parse(prompts);
+                    }
+                }
+                
+                // Only process if we have a valid object
+                if (prompts && typeof prompts === 'object') {
+                    Object.entries(prompts).forEach(([id, option]) => {
+                        if (option && typeof option === 'object') {
+                            addAIPollOptionElement({ id, ...option });
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error('Failed to parse AI poll prompts:', e, promptsJson);
+            }
+        }
+        
+        function getAIPollOptionsData() {
+            const container = document.getElementById('aiPollOptionsContainer');
+            const optionDivs = container.querySelectorAll('.poll-option-item');
+            
+            const prompts = {};
+            
+            optionDivs.forEach(div => {
+                const optionId = div.dataset.optionId;
+                const key = div.querySelector('[data-field="key"]')?.value;
+                const value = div.querySelector('[data-field="value"]')?.value;
+                const type = div.querySelector('[data-field="type"]')?.value;
+                const model = div.querySelector('[data-field="model"]')?.value;
+                
+                if (key && value) {
+                    prompts[optionId] = { key, value, type, model: model || '@cf/openai/gpt-oss-120b' };
+                }
+            });
+            
+            return Object.keys(prompts).length > 0 ? JSON.stringify(prompts) : null;
+        }
+        
         function checkRouteDependencies() {
             if (!currentEditSlide) return;
             
@@ -1066,6 +1193,9 @@ export const SLIDE_MANAGER_HTML = `<!DOCTYPE html>
                 const pollData = getPollOptionsData();
                 slideData.poll_options = pollData.options;
                 slideData.poll_routes = pollData.routes;
+            } else if (slideData.slide_type === 'ai_poll') {
+                const aiPollData = getAIPollOptionsData();
+                slideData.ai_poll_prompts = aiPollData; // Already JSON stringified
             }
             
             try {

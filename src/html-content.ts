@@ -343,9 +343,11 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
             background: rgba(255, 255, 255, 0.98);
             padding: 1.5rem;
             padding-top: calc(1.5rem + env(safe-area-inset-top, 0px));
+            padding-bottom: 0.5rem;
             display: none;
             flex-direction: column;
             z-index: 100;
+            overflow: hidden;
         }
         
         .poll-view.active {
@@ -375,11 +377,11 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
         }
         
         .poll-options {
-            flex: 1;
             display: flex;
             flex-direction: column;
             gap: 1rem;
             overflow-y: auto;
+            padding-bottom: 1rem;
         }
         
         .poll-option {
@@ -428,9 +430,10 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
         
         .vote-status {
             text-align: center;
-            padding: 1rem;
+            padding: 1rem 0 0 0;
             font-size: 1rem;
             color: #666;
+            background: transparent;
         }
         
         .vote-status.voted {
@@ -890,6 +893,9 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                 } else if (data.type === 'pollEnd') {
                     // Poll ended
                     endPoll(data.data);
+                } else if (data.type === 'aiContentGenerated') {
+                    // Handle AI-generated content
+                    handleAIContentGenerated(data.data);
                 } else if (data.type === 'prizeWinner') {
                     // Show prize winner celebration
                     if (data.data && data.data.winner) {
@@ -902,6 +908,9 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                     console.log('Received slideChanged event:', data.data.index, data.data.title);
                     // Update current slide info
                     if (data.data) {
+                        // Show the title again (in case it was hidden by AI content)
+                        document.getElementById('currentTitle').style.display = 'block';
+                        
                         // Update title
                         if (data.data.title) {
                             document.getElementById('currentTitle').textContent = data.data.title;
@@ -1247,6 +1256,20 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                     document.getElementById('voteStatus').style.fontSize = '1.2rem';
                 }
                 
+                // Check if this is an AI Poll
+                if (data.isAIPoll && data.aiGenerationPending) {
+                    // Show generation pending message
+                    setTimeout(() => {
+                        document.getElementById('voteStatus').innerHTML = \`
+                            <div style="text-align: center;">
+                                <i class="fas fa-magic" style="color: #667eea; font-size: 1.5rem;"></i>
+                                <p style="margin: 0.5rem 0;">Generating AI \${data.winningOption.type === 'image' ? 'Image' : 'Response'}...</p>
+                                <div><i class="fas fa-spinner fa-spin" style="color: #667eea;"></i></div>
+                            </div>
+                        \`;
+                    }, 2000);
+                }
+                
                 // Removed confetti effect - emojis are enough for celebration
             }
             
@@ -1259,6 +1282,79 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                 // The slideChanged message will update the title with correct slide data
                 // so we don't need to do it here
             }, 3000);
+        }
+        
+        function handleAIContentGenerated(data) {
+            console.log('AI Content Generated:', data);
+            
+            // Hide poll view
+            document.getElementById('pollView').classList.remove('active');
+            
+            // Get the slide body element
+            const slideBody = document.getElementById('slideBody');
+            if (!slideBody) return;
+            
+            const content = data.content;
+            
+            if (content.type === 'image') {
+                // Display generated image
+                slideBody.innerHTML = \`
+                    <div style="text-align: center; padding: 1rem;">
+                        <h3 style="color: #667eea; margin-bottom: 1rem; font-size: 1.6rem;">
+                            <i class="fas fa-magic"></i> AI Generated: \${data.optionKey}
+                        </h3>
+                        <div style="display: flex; justify-content: center; align-items: center;">
+                            <img src="\${content.url}" 
+                                 alt="AI Generated Image" 
+                                 style="max-width: 100%; max-height: 60vh; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);"
+                                 onload="this.style.opacity = '0'; setTimeout(() => { this.style.transition = 'opacity 0.5s'; this.style.opacity = '1'; }, 50);">
+                        </div>
+                    </div>
+                \`;
+                
+                // Hide the regular slide title
+                document.getElementById('currentTitle').style.display = 'none';
+            } else if (content.type === 'text') {
+                // Display text with simulated streaming
+                slideBody.innerHTML = \`
+                    <div style="padding: 1rem;">
+                        <h3 style="color: #667eea; margin-bottom: 1.5rem; font-size: 1.4rem;">
+                            <i class="fas fa-robot"></i> AI Response: \${data.optionKey}
+                        </h3>
+                        <div id="aiTextContent" style="font-size: 1.2rem; line-height: 1.6; color: #444; white-space: pre-wrap;"></div>
+                    </div>
+                \`;
+                
+                // Hide the regular slide title
+                document.getElementById('currentTitle').style.display = 'none';
+                
+                // Simulate streaming effect for the audience
+                if (content.content) {
+                    simulateTextStreaming('aiTextContent', content.content);
+                }
+            }
+        }
+        
+        function simulateTextStreaming(elementId, fullText) {
+            const element = document.getElementById(elementId);
+            if (!element || !fullText) return;
+            
+            let index = 0;
+            const chunkSize = 3; // Characters per frame
+            
+            const streamInterval = setInterval(() => {
+                if (index < fullText.length) {
+                    element.textContent += fullText.slice(index, index + chunkSize);
+                    index += chunkSize;
+                    
+                    // Auto-scroll if content overflows
+                    if (element.scrollHeight > element.clientHeight) {
+                        element.scrollTop = element.scrollHeight;
+                    }
+                } else {
+                    clearInterval(streamInterval);
+                }
+            }, 30); // 30ms between chunks for smooth appearance
         }
         
         function getUserId() {

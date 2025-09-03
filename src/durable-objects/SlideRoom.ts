@@ -1,9 +1,11 @@
 import { DurableObjectState, DurableObjectNamespace } from '@cloudflare/workers-types';
+import { AIContentGenerator, slugify } from '../utils/ai-generator';
 
 interface Env {
   ASSETS_BUCKET: R2Bucket;
   POLL_ROOM: DurableObjectNamespace;
   DB: D1Database;
+  AI: any;
 }
 
 interface SlideState {
@@ -16,6 +18,8 @@ interface SlideState {
   sessionCode?: string;
   presentationId?: string;
   presenterToken?: string;
+  generatedContent?: Map<number, any>; // Store AI-generated content per slide
+  originalSlideContent?: Map<number, any>; // Store original slide content
 }
 
 export class SlideRoom {
@@ -27,6 +31,7 @@ export class SlideRoom {
   private pollTimer: any;
   private sql: any; // Durable Object SQL storage
   private presentationData: any[] = [];
+  private presentationInfo: any = null;
   private participantMap: Map<WebSocket, any>;
   private prizeWinners: Set<string>; // Track winner IDs to prevent duplicate wins
 
@@ -42,7 +47,9 @@ export class SlideRoom {
       currentNodeId: 'start',
       history: ['start'],
       participantCount: 0,
-      visitedSlides: new Set([0]) // Start with welcome slide as visited
+      visitedSlides: new Set([0]), // Start with welcome slide as visited
+      generatedContent: new Map(),
+      originalSlideContent: new Map()
     };
     
     // Initialize SQL tables on construction
@@ -213,6 +220,15 @@ export class SlideRoom {
   private async loadPresentationFromD1(presentationId: string) {
     try {
       console.log(`Loading presentation ${presentationId} from D1...`);
+      
+      // Query presentation info
+      const presentationResult = await this.env.DB.prepare(
+        `SELECT * FROM presentations WHERE id = ?`
+      ).bind(presentationId).first();
+      
+      if (presentationResult) {
+        this.presentationInfo = presentationResult;
+      }
       
       // Query slides from D1
       const result = await this.env.DB.prepare(
@@ -1081,16 +1097,49 @@ export class SlideRoom {
       // Get slide by index position (not order_number)
       const slide = sortedSlides[index];
       if (slide) {
-        return {
+        // Check if this slide is being restored to original content
+        const isAIPoll = slide.slide_type === 'ai_poll';
+        const hasGeneratedContent = this.slideState.generatedContent?.has(index);
+        const originalContent = this.slideState.originalSlideContent?.get(index);
+        
+        // Determine what content to show
+        let displayContent = {
           title: slide.title,
           content: slide.content ? JSON.parse(slide.content) : [],
-          bullets: slide.bullets ? JSON.parse(slide.bullets) : [],
+          bullets: slide.bullets ? JSON.parse(slide.bullets) : []
+        };
+        
+        // If this is an AI Poll slide, include special handling
+        if (isAIPoll) {
+          // Check if we should show generated content or original
+          if (hasGeneratedContent) {
+            // Show generated content state
+            const generatedData = this.slideState.generatedContent?.get(index);
+            displayContent = {
+              ...displayContent,
+              hasGeneratedContent: true,
+              generatedContent: generatedData,
+              restoreOriginal: false
+            } as any;
+          } else if (originalContent) {
+            // Restore original content
+            displayContent = {
+              ...originalContent,
+              restoreOriginal: true
+            } as any;
+          }
+        }
+        
+        return {
+          ...displayContent,
           gif: slide.gif && slide.gif !== 'null' ? slide.gif : null,
           isBioSlide: slide.is_bio_slide === 1,
           slideType: slide.slide_type,
+          slide_type: slide.slide_type, // Include both for compatibility
           pollQuestion: slide.poll_question,
           pollOptions: slide.poll_options ? JSON.parse(slide.poll_options) : null,
           pollRoutes: slide.poll_routes ? JSON.parse(slide.poll_routes) : null,
+          ai_poll_prompts: slide.ai_poll_prompts, // Include AI poll prompts
           totalSlides: sortedSlides.length
         };
       }
@@ -1260,6 +1309,15 @@ export class SlideRoom {
       index = totalSlides - 1; // Stay on last slide
     }
     
+    // Check if the target slide has generated AI content
+    const targetSlide = this.presentationData[index];
+    const hasGeneratedContent = this.slideState.generatedContent?.has(index);
+    
+    // Check if we're leaving a slide that had AI content generated
+    const previousIndex = this.slideState.currentSlideIndex;
+    const previousSlide = this.presentationData[previousIndex];
+    const wasAIPoll = previousSlide && previousSlide.slide_type === 'ai_poll';
+    
     this.slideState.currentSlideIndex = index;
     this.slideState.visitedSlides.add(index); // Track visited slide
     await this.saveState();
@@ -1378,7 +1436,8 @@ export class SlideRoom {
       ...pollData,
       votes: {},
       voters: new Set<string>(),
-      startTime: Date.now()
+      startTime: Date.now(),
+      isAIPoll: pollData.isAIPoll || false  // Preserve AI poll flag
     };
     
     // Initialize vote counts
@@ -1472,29 +1531,119 @@ export class SlideRoom {
     const winningOption = this.activePoll.options.find((o: any) => o.id === finalWinner);
     const nextTopic = winningOption ? winningOption.label : 'Next Topic';
     
-    // Navigate to the winning slide
-    if (winningOption) {
-      const nextSlideIndex = this.getSlideIndexFromOption(winningOption);
-      if (nextSlideIndex !== null) {
-        await this.navigateToSlide(nextSlideIndex);
-      }
-    }
+    // Check if this is an AI Poll
+    const sortedSlides = [...this.presentationData].sort((a: any, b: any) => a.order_number - b.order_number);
+    const currentSlide = sortedSlides[this.slideState.currentSlideIndex];
+    const isAIPoll = this.activePoll.isAIPoll || (currentSlide && currentSlide.slide_type === 'ai_poll');
     
-    // Broadcast poll end
-    this.broadcast({
-      type: 'pollEnd',
-      data: {
-        pollId: this.activePoll.pollId,
-        winner: finalWinner,
-        votes: this.activePoll.votes,
-        nextTopic,
-        isTie: winners.length > 1
+    if (isAIPoll && winningOption && currentSlide.ai_poll_prompts) {
+      // Store original slide content before generating AI content
+      if (!this.slideState.originalSlideContent?.has(this.slideState.currentSlideIndex)) {
+        this.slideState.originalSlideContent?.set(this.slideState.currentSlideIndex, {
+          title: currentSlide.title,
+          content: currentSlide.content,
+          bullets: currentSlide.bullets
+        });
       }
-    });
+      
+      // Parse AI poll prompts
+      const aiPrompts = JSON.parse(currentSlide.ai_poll_prompts);
+      const winningPrompt = aiPrompts[finalWinner];
+      
+      if (winningPrompt) {
+        // Broadcast poll end with AI generation pending
+        this.broadcast({
+          type: 'pollEnd',
+          data: {
+            pollId: this.activePoll.pollId,
+            winner: finalWinner,
+            votes: this.activePoll.votes,
+            nextTopic,
+            isTie: winners.length > 1,
+            isAIPoll: true,
+            aiGenerationPending: true,
+            winningOption: {
+              key: winningPrompt.key,
+              type: winningPrompt.type
+            }
+          }
+        });
+        
+        // Trigger AI content generation
+        await this.generateAIContent(winningPrompt, currentSlide, finalWinner);
+      }
+    } else {
+      // Navigate to the winning slide for regular polls
+      if (winningOption) {
+        const nextSlideIndex = this.getSlideIndexFromOption(winningOption);
+        if (nextSlideIndex !== null) {
+          await this.navigateToSlide(nextSlideIndex);
+        }
+      }
+      
+      // Broadcast regular poll end
+      this.broadcast({
+        type: 'pollEnd',
+        data: {
+          pollId: this.activePoll.pollId,
+          winner: finalWinner,
+          votes: this.activePoll.votes,
+          nextTopic,
+          isTie: winners.length > 1
+        }
+      });
+    }
     
     // Clear active poll
     this.activePoll = null;
     this.pollTimer = null;
+  }
+  
+  private async generateAIContent(prompt: any, slide: any, optionId: string) {
+    try {
+      // Initialize AI content generator
+      const aiGenerator = new AIContentGenerator(this.env);
+      
+      // Get presentation name for slug
+      const presentationName = this.presentationInfo?.name || 'presentation';
+      const presentationSlug = slugify(presentationName);
+      
+      // Generate AI content
+      const generatedContent = await aiGenerator.generateContent(
+        {
+          id: optionId,
+          ...prompt
+        },
+        this.slideState.presentationId || '',
+        presentationSlug,
+        slide.id,
+        this.slideState.sessionCode || 'default'
+      );
+      
+      // Store generated content
+      this.slideState.generatedContent?.set(this.slideState.currentSlideIndex, generatedContent);
+      
+      // Broadcast AI content to all clients
+      this.broadcast({
+        type: 'aiContentGenerated',
+        data: {
+          slideIndex: this.slideState.currentSlideIndex,
+          content: generatedContent,
+          optionKey: prompt.key
+        }
+      });
+      
+    } catch (error) {
+      console.error('Failed to generate AI content:', error);
+      
+      // Broadcast error
+      this.broadcast({
+        type: 'aiGenerationError',
+        data: {
+          error: 'Failed to generate AI content'
+        }
+      });
+    }
   }
   
   private getSlideIndexFromOption(option: any): number | null {

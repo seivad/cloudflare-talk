@@ -18,7 +18,7 @@ import { SETUP_HTML } from './pages/setup-html'
 import { TESTING_HTML } from './testing-html'
 import { runImport } from './utils/import-json'
 import { generateSessionCode, generatePresenterToken } from './utils/session-code'
-import { PresentationQueries } from './db/queries'
+import { PresentationQueries, AIPollOption } from './db/queries'
 import * as db from './auth/db-utils'
 
 export { SlideRoom, PollRoom, ContainerStatus }
@@ -30,6 +30,7 @@ interface Env {
 	VOTE_QUEUE: Queue
 	DB: D1Database
 	ASSETS_BUCKET: R2Bucket
+	AI: any // CloudFlare AI binding
 	AUDIENCE_URL: string
 	ADMIN_KEY: string
 	JWT_SECRET: string
@@ -866,6 +867,112 @@ app.post('/admin/import-default', async (c) => {
 		)
 	}
 })
+
+// API: Generate AI content for poll winner
+app.post('/api/generate-ai-content', async (c) => {
+	try {
+		const body = await c.req.json<{
+			option: AIPollOption;
+			presentationId: string;
+			presentationName: string;
+			slideId: string;
+			sessionCode: string;
+		}>();
+
+		// Import AI generator utilities
+		const { AIContentGenerator, slugify } = await import('./utils/ai-generator');
+		const generator = new AIContentGenerator(c.env);
+
+		// Generate content
+		const presentationSlug = slugify(body.presentationName);
+		const content = await generator.generateContent(
+			body.option,
+			body.presentationId,
+			presentationSlug,
+			body.slideId,
+			body.sessionCode
+		);
+
+		// Update slide with generated content URL
+		await db.updateSlide(c.env.DB, body.slideId, undefined, {
+			generated_content_url: content.url
+		});
+
+		return c.json(content);
+	} catch (error) {
+		console.error('Failed to generate AI content:', error);
+		return c.json({ error: 'Failed to generate AI content' }, 500);
+	}
+});
+
+// API: Stream AI text generation for presenter
+app.get('/api/stream-ai-response', async (c) => {
+	const prompt = c.req.query('prompt');
+	const model = c.req.query('model');
+	const sessionCode = c.req.query('session');
+
+	if (!prompt) {
+		return c.text('Missing prompt parameter', 400);
+	}
+
+	// Set up SSE headers
+	const headers = {
+		'Content-Type': 'text/event-stream',
+		'Cache-Control': 'no-cache',
+		'Connection': 'keep-alive',
+	};
+
+	// Create a TransformStream for SSE
+	const { readable, writable } = new TransformStream();
+	const writer = writable.getWriter();
+	const encoder = new TextEncoder();
+
+	// Start streaming in the background
+	(async () => {
+		try {
+			const { AIContentGenerator } = await import('./utils/ai-generator');
+			const generator = new AIContentGenerator(c.env);
+
+			for await (const chunk of generator.streamText(prompt, model)) {
+				const message = `data: ${JSON.stringify({ text: chunk })}\n\n`;
+				await writer.write(encoder.encode(message));
+			}
+
+			// Send completion message
+			await writer.write(encoder.encode('data: [DONE]\n\n'));
+		} catch (error) {
+			console.error('Streaming error:', error);
+			const errorMessage = `data: ${JSON.stringify({ error: 'Stream failed' })}\n\n`;
+			await writer.write(encoder.encode(errorMessage));
+		} finally {
+			await writer.close();
+		}
+	})();
+
+	return new Response(readable, { headers });
+});
+
+// API: Serve R2 content
+app.get('/r2/*', async (c) => {
+	const path = c.req.path.replace('/r2/', '');
+	
+	try {
+		const object = await c.env.ASSETS_BUCKET.get(path);
+		
+		if (!object) {
+			return c.text('Not found', 404);
+		}
+
+		const headers = new Headers();
+		object.httpMetadata?.contentType && headers.set('Content-Type', object.httpMetadata.contentType);
+		headers.set('Cache-Control', 'public, max-age=3600');
+		
+		return new Response(object.body, { headers });
+	} catch (error) {
+		console.error('Error serving R2 content:', error);
+		return c.text('Error retrieving content', 500);
+	}
+});
 
 // Export queue consumer
 export default {

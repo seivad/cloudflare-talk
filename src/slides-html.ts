@@ -65,20 +65,20 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
 
         .slide {
             width: 100%;
-            display: none;
+            display: none !important;
             animation: slideIn 0.5s ease-out;
         }
 
         .slide.active {
-            display: block;
+            display: block !important;
         }
         
         .slide.with-gif {
-            display: none;
+            display: none !important;
         }
         
         .slide.with-gif.active {
-            display: flex;
+            display: flex !important;
             gap: 3rem;
         }
         
@@ -902,6 +902,21 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                     }
                     break;
                     
+                case 'aiContentGenerated':
+                    // Handle AI-generated content display
+                    if (data.data) {
+                        handleAIContentGenerated(data.data);
+                    }
+                    break;
+                    
+                case 'aiGenerationError':
+                    // Handle AI generation errors
+                    if (data.data) {
+                        console.error('AI Generation Error:', data.data.error);
+                        // Could show error message to user
+                    }
+                    break;
+                    
                 case 'prizeWinner':
                     // Display prize winner
                     if (data.data && data.data.winner) {
@@ -964,8 +979,23 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         }
 
         function updateSlideDisplay() {
+            // Clear any AI content from all slides first
             slides.forEach((slide, index) => {
                 slide.classList.toggle('active', index === currentSlideIndex);
+                
+                // If this slide has been modified (likely by AI content), restore it
+                if (slide.hasAttribute('data-ai-modified')) {
+                    console.log('Clearing AI content from slide', index);
+                    slide.removeAttribute('data-ai-modified');
+                    // Request fresh content from server for this slide
+                    if (index === currentSlideIndex && ws && ws.readyState === WebSocket.OPEN) {
+                        // Request the server to send current slide data
+                        ws.send(JSON.stringify({
+                            type: 'requestSlideData',
+                            index: currentSlideIndex
+                        }));
+                    }
+                }
             });
             
             // Hide main QR container for initial slides (first slide) as they have their own QR
@@ -1008,6 +1038,37 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             if (slideData.totalSlides !== undefined) {
                 totalSlidesFromDB = slideData.totalSlides;
                 console.log('Updated total slides from server data:', totalSlidesFromDB);
+            }
+            
+            // Check if this slide has AI-generated content
+            if (slideData.hasGeneratedContent && slideData.generatedContent) {
+                console.log('Displaying previously generated AI content');
+                const content = slideData.generatedContent;
+                
+                if (content.type === 'image') {
+                    slideDiv.innerHTML = \`
+                        <div style="text-align: center; padding: 2rem;">
+                            <h2 style="color: #667eea; margin-bottom: 1rem;">
+                                <i class="fas fa-magic"></i> AI Generated: \${content.optionKey || ''}
+                            </h2>
+                            <div style="display: flex; justify-content: center; align-items: center; min-height: 60vh;">
+                                <img src="\${content.url}" 
+                                     alt="AI Generated Image" 
+                                     style="max-width: 90%; max-height: 48vh; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
+                            </div>
+                        </div>
+                    \`;
+                } else if (content.type === 'text') {
+                    slideDiv.innerHTML = \`
+                        <div style="padding: 3rem;">
+                            <h2 style="color: #667eea; margin-bottom: 2rem;">
+                                <i class="fas fa-robot"></i> AI Response: \${content.optionKey || ''}
+                            </h2>
+                            <div style="font-size: 1.6rem; line-height: 1.8; color: #333; max-width: 900px; margin: 0 auto; white-space: pre-wrap;">\${content.content || ''}</div>
+                        </div>
+                    \`;
+                }
+                return; // Don't process regular slide content
             }
             
             // Check if this is the bio slide
@@ -1235,12 +1296,70 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             // Check if current slide has poll data
             const currentSlide = window.currentSlideData;
             
-            // First check if this is a poll slide type
-            if (!currentSlide || (currentSlide.slideType !== 'poll' && currentSlide.slide_type !== 'poll')) {
-                console.log('Current slide is not a poll slide. Type:', currentSlide?.slideType || currentSlide?.slide_type);
+            // First check if this is a poll or ai_poll slide type
+            const slideType = currentSlide?.slideType || currentSlide?.slide_type;
+            const isPollSlide = slideType === 'poll' || slideType === 'ai_poll';
+            
+            console.log('📊 Poll check - slideType:', slideType, 'isPollSlide:', isPollSlide);
+            console.log('📊 Current slide data:', currentSlide);
+            
+            if (!currentSlide || !isPollSlide) {
+                console.log('Current slide is not a poll slide. Type:', slideType);
                 return;
             }
             
+            // Handle AI Poll differently
+            if (slideType === 'ai_poll' || currentSlide.ai_poll_prompts) {
+                console.log('🤖 AI Poll detected! slideType:', slideType, 'has ai_poll_prompts:', !!currentSlide.ai_poll_prompts);
+                
+                if (!currentSlide.ai_poll_prompts) {
+                    console.error('AI Poll slide but no ai_poll_prompts data!');
+                    return;
+                }
+                
+                console.log('🤖 Starting AI Poll with prompts:', currentSlide.ai_poll_prompts);
+                
+                // Parse AI poll prompts to create poll options
+                let aiPrompts;
+                try {
+                    aiPrompts = typeof currentSlide.ai_poll_prompts === 'string' 
+                        ? JSON.parse(currentSlide.ai_poll_prompts)
+                        : currentSlide.ai_poll_prompts;
+                } catch (e) {
+                    console.error('Failed to parse AI poll prompts:', e);
+                    return;
+                }
+                
+                // Convert AI prompts to poll options format
+                const pollOptions = Object.entries(aiPrompts).map(([id, prompt]) => ({
+                    id: id,
+                    label: prompt.key,
+                    emoji: prompt.type === 'image' ? '🎨' : '📝'
+                }));
+                
+                const pollData = {
+                    pollId: 'ai-poll-' + Date.now(),
+                    question: 'Choose an AI option:',
+                    options: pollOptions,
+                    pollRoutes: {},
+                    duration: 20,
+                    isAIPoll: true
+                };
+                
+                // Start poll via WebSocket to notify all clients
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'startPoll',
+                        data: pollData
+                    }));
+                    
+                    // Also show on presenter view
+                    showPollOverlay(pollData);
+                }
+                return;
+            }
+            
+            // Handle regular poll
             if (currentSlide && currentSlide.pollQuestion && currentSlide.pollOptions) {
                 console.log('Using poll from current slide');
                 
@@ -1338,6 +1457,38 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             };
         }
 
+        function hidePollOverlay() {
+            console.log('Hiding poll overlay...');
+            
+            // Hide the poll slide
+            const pollSlide = document.querySelector('.poll-slide');
+            if (pollSlide) {
+                pollSlide.style.display = 'none';
+                pollSlide.classList.remove('active');
+                console.log('Poll slide hidden');
+            }
+            
+            // Also hide any overlay if it exists
+            const overlay = document.getElementById('pollOverlay');
+            if (overlay) {
+                overlay.style.display = 'none';
+                overlay.innerHTML = ''; // Clear content
+                console.log('Poll overlay hidden');
+            }
+            
+            // Show regular slides again
+            const slideContent = document.getElementById('slideContent');
+            if (slideContent) {
+                slideContent.style.display = 'block';
+            }
+            
+            // Make sure the active slide is visible
+            const activeSlide = document.querySelector('.slide.active');
+            if (activeSlide) {
+                activeSlide.style.display = 'block';
+            }
+        }
+        
         function showPollOverlay(pollData) {
             currentPollData = pollData;
             pollVotes = {};
@@ -1472,6 +1623,8 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         }
 
         function handlePollEnd(data) {
+            console.log('Poll ended:', data);
+            
             // Show winner with very clear green highlighting
             if (data.winner) {
                 const winnerElement = document.querySelector(\`[data-option-id="\${data.winner}"]\`);
@@ -1502,6 +1655,37 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                     // Animate the winner
                     winnerElement.style.transition = 'all 0.5s ease-out';
                 }
+                
+                // Check if this is an AI Poll
+                if (data.isAIPoll && data.aiGenerationPending) {
+                    // Show generation pending message
+                    setTimeout(() => {
+                        const pollOverlay = document.getElementById('pollOverlay');
+                        if (pollOverlay) {
+                            pollOverlay.innerHTML += \`
+                                <div style="margin-top: 2rem; padding: 1.5rem; background: rgba(255,255,255,0.9); border-radius: 12px;">
+                                    <h3 style="color: #667eea; margin-bottom: 1rem;">
+                                        <i class="fas fa-magic"></i> Generating AI Content...
+                                    </h3>
+                                    <p style="color: #666; font-size: 1.2rem;">
+                                        Creating \${data.winningOption.type === 'image' ? 'image' : 'text'} for: 
+                                        <strong>"\${data.winningOption.key}"</strong>
+                                    </p>
+                                    <div class="loading-spinner" style="margin-top: 1rem;">
+                                        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #667eea;"></i>
+                                    </div>
+                                </div>
+                            \`;
+                        }
+                    }, 2000);
+                    // Don't hide overlay yet - wait for AI content
+                    return;
+                }
+                
+                // For regular polls, hide overlay after showing results
+                setTimeout(() => {
+                    hidePollOverlay();
+                }, 3000);
             }
             
             // Show tie indicator if applicable
@@ -1530,6 +1714,15 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             // Don't determine winner locally - wait for backend to decide
             // The backend will handle ties and send the real winner via WebSocket
             console.log('Poll timer ended, waiting for backend to determine winner...');
+            
+            // Add a fallback to hide overlay after 10 seconds if no pollEnd message arrives
+            setTimeout(() => {
+                const overlay = document.getElementById('pollOverlay');
+                if (overlay && overlay.style.display !== 'none') {
+                    console.log('Fallback: hiding poll overlay after timeout');
+                    hidePollOverlay();
+                }
+            }, 10000);
         }
 
         function pickOption(number) {
@@ -1941,6 +2134,124 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             currentSlideIndex = finalSlideIndex;
             updateSlideDisplay();
             sendSlideUpdate();
+        }
+        
+        // AI Content Handling Functions
+        function handleAIContentGenerated(data) {
+            console.log('AI Content Generated:', data);
+            
+            // Hide poll overlay forcefully
+            hidePollOverlay();
+            
+            // Also remove poll slide completely
+            const pollSlide = document.querySelector('.poll-slide');
+            if (pollSlide) {
+                pollSlide.remove();
+                console.log('Poll slide removed');
+            }
+            
+            // Also try to hide any poll-related elements directly
+            const pollElements = document.querySelectorAll('.poll-overlay, #pollOverlay');
+            pollElements.forEach(el => {
+                el.style.display = 'none';
+                el.remove();
+            });
+            
+            // Ensure slide content is visible
+            const slideContent = document.getElementById('slideContent');
+            if (slideContent) {
+                slideContent.style.display = 'block';
+            }
+            
+            // Get the current slide
+            const slideDiv = document.querySelector('.slide.active');
+            if (!slideDiv) {
+                console.error('No active slide found for AI content display');
+                return;
+            }
+            
+            // Mark this slide as modified by AI content
+            slideDiv.setAttribute('data-ai-modified', 'true');
+            
+            const content = data.content;
+            
+            if (content.type === 'image') {
+                // Display generated image
+                slideDiv.innerHTML = \`
+                    <div style="text-align: center; padding: 2rem;">
+                        <h2 style="color: #667eea; margin-bottom: 1rem;">
+                            <i class="fas fa-magic"></i> AI Generated: \${data.optionKey}
+                        </h2>
+                        <div style="display: flex; justify-content: center; align-items: center; min-height: 60vh;">
+                            <img src="\${content.url}" 
+                                 alt="AI Generated Image" 
+                                 style="max-width: 90%; max-height: 48vh; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);"
+                                 onload="this.style.opacity = '0'; setTimeout(() => { this.style.transition = 'opacity 0.5s'; this.style.opacity = '1'; }, 50);">
+                        </div>
+                    </div>
+                \`;
+            } else if (content.type === 'text') {
+                // Stream text content for presenter
+                slideDiv.innerHTML = \`
+                    <div style="padding: 3rem;">
+                        <h2 style="color: #667eea; margin-bottom: 2rem;">
+                            <i class="fas fa-robot"></i> AI Response: \${data.optionKey}
+                        </h2>
+                        <div id="aiTextContent" style="font-size: 1.6rem; line-height: 1.8; color: #333; max-width: 900px; margin: 0 auto; white-space: pre-wrap;"></div>
+                    </div>
+                \`;
+                
+                // Connect to SSE endpoint for real-time streaming
+                if (content.content) {
+                    // If we already have the full text (shouldn't happen for presenter)
+                    document.getElementById('aiTextContent').textContent = content.content;
+                } else {
+                    // Connect to streaming endpoint
+                    connectToAITextStream(data.optionKey);
+                }
+            }
+        }
+        
+        function connectToAITextStream(optionKey) {
+            // For presenter, use Server-Sent Events for real streaming
+            const params = new URLSearchParams({
+                prompt: optionKey,
+                session: roomId || '123456'
+            });
+            
+            const eventSource = new EventSource(\`/api/stream-ai-response?\${params}\`);
+            const element = document.getElementById('aiTextContent');
+            
+            if (!element) {
+                console.error('AI text content element not found');
+                return;
+            }
+            
+            eventSource.onmessage = (event) => {
+                if (event.data === '[DONE]') {
+                    eventSource.close();
+                    return;
+                }
+                
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.text) {
+                        element.textContent += data.text;
+                        element.scrollTop = element.scrollHeight;
+                    }
+                } catch (error) {
+                    console.error('Error parsing SSE data:', error);
+                }
+            };
+            
+            eventSource.onerror = (error) => {
+                console.error('SSE error:', error);
+                eventSource.close();
+                // Show error message
+                if (element) {
+                    element.innerHTML += '<br><span style="color: red;">Stream connection lost</span>';
+                }
+            };
         }
     </script>
 </body>

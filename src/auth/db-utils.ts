@@ -194,6 +194,7 @@ export async function createSlide(
     poll_question?: string;
     poll_options?: string;
     poll_routes?: string;
+    ai_poll_prompts?: string;
     is_bio_slide?: boolean;
   }
 ): Promise<string | null> {
@@ -212,8 +213,8 @@ export async function createSlide(
   await db.prepare(
     `INSERT INTO slides (
       id, presentation_id, order_number, title, content, bullets, gif,
-      slide_type, poll_question, poll_options, poll_routes, is_bio_slide
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      slide_type, poll_question, poll_options, poll_routes, ai_poll_prompts, is_bio_slide
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     id,
     data.presentation_id,
@@ -226,6 +227,7 @@ export async function createSlide(
     data.poll_question || null,
     data.poll_options || null,
     data.poll_routes || null,
+    data.ai_poll_prompts || null,
     data.is_bio_slide ? 1 : 0
   ).run();
   
@@ -253,7 +255,7 @@ export async function updateSlide(
   
   const fields = [
     'title', 'content', 'bullets', 'gif', 'slide_type',
-    'poll_question', 'poll_options', 'poll_routes'
+    'poll_question', 'poll_options', 'poll_routes', 'ai_poll_prompts'
   ];
   
   for (const field of fields) {

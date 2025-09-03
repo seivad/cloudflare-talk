@@ -19,10 +19,12 @@ export interface Slide {
   title: string;
   content: string | null; // JSON string
   bullets: string | null; // JSON string
-  slide_type: 'standard' | 'poll' | 'bio';
+  slide_type: 'standard' | 'poll' | 'bio' | 'ai_poll';
   poll_question: string | null;
   poll_options: string | null; // JSON string
   poll_routes: string | null; // JSON string
+  ai_poll_prompts: string | null; // JSON string with AI poll configuration
+  generated_content_url: string | null; // URL to generated content in R2
   is_bio_slide: number;
   created_at: string;
 }
@@ -31,6 +33,25 @@ export interface PollOption {
   id: string;
   label: string;
   emoji?: string;
+}
+
+export interface AIPollOption {
+  id: string;
+  key: string; // Display text for users
+  value: string; // AI prompt
+  type: 'image' | 'text';
+  model?: string; // Optional model specification
+}
+
+export interface AIGeneratedContent {
+  type: 'image' | 'text';
+  url: string;
+  content?: string; // For text responses
+  optionKey: string;
+  timestamp: number;
+  presentationId: string;
+  slideId: string;
+  sessionCode: string;
 }
 
 export class PresentationQueries {
@@ -153,8 +174,9 @@ export class SlideQueries {
     await this.db.prepare(
       `INSERT INTO slides (
         id, presentation_id, order_number, title, content, bullets,
-        slide_type, poll_question, poll_options, poll_routes, is_bio_slide
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        slide_type, poll_question, poll_options, poll_routes, ai_poll_prompts,
+        generated_content_url, is_bio_slide
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       id,
       slide.presentation_id,
@@ -166,6 +188,8 @@ export class SlideQueries {
       slide.poll_question,
       slide.poll_options,
       slide.poll_routes,
+      slide.ai_poll_prompts || null,
+      slide.generated_content_url || null,
       slide.is_bio_slide
     ).run();
     
@@ -216,6 +240,14 @@ export class SlideQueries {
       fields.push('is_bio_slide = ?');
       values.push(updates.is_bio_slide);
     }
+    if (updates.ai_poll_prompts !== undefined) {
+      fields.push('ai_poll_prompts = ?');
+      values.push(updates.ai_poll_prompts);
+    }
+    if (updates.generated_content_url !== undefined) {
+      fields.push('generated_content_url = ?');
+      values.push(updates.generated_content_url);
+    }
     
     if (fields.length === 0) return;
     
@@ -252,8 +284,9 @@ export class SlideQueries {
       return this.db.prepare(
         `INSERT INTO slides (
           id, presentation_id, order_number, title, content, bullets,
-          slide_type, poll_question, poll_options, poll_routes, is_bio_slide
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          slide_type, poll_question, poll_options, poll_routes, ai_poll_prompts,
+          generated_content_url, is_bio_slide
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
         id,
         slide.presentation_id,
@@ -265,6 +298,8 @@ export class SlideQueries {
         slide.poll_question,
         slide.poll_options,
         slide.poll_routes,
+        slide.ai_poll_prompts || null,
+        slide.generated_content_url || null,
         slide.is_bio_slide
       );
     });
