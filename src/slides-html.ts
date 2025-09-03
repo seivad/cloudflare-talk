@@ -1035,8 +1035,9 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                 const currentSlideData = slideData[currentSlideIndex];
                 const hasGif = currentSlideData && currentSlideData.gif;
                 
-                // Hide QR for slides with GIF (they have side-by-side QR) or initial slides with their own QR
-                if (hasGif || (isInitialSlide && !currentSlideData?.isBioSlide)) {
+                // Hide QR for slides with GIF (they have side-by-side QR), initial slides with their own QR, or bio slides
+                const isBioSlide = currentSlideData && currentSlideData.isBioSlide;
+                if (hasGif || (isInitialSlide && !currentSlideData?.isBioSlide) || isBioSlide) {
                     mainQR.style.display = 'none';
                 } else {
                     mainQR.style.display = 'block';
@@ -1254,12 +1255,13 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                 }
             }
             
-            // Update main QR visibility based on whether slide has GIF
+            // Update main QR visibility based on whether slide has GIF or is bio slide
             const mainQR = document.getElementById('mainQRContainer');
             if (mainQR) {
                 const hasGif = slideData && slideData.gif;
-                // Hide QR for slides with GIF (they have side-by-side QR)
-                mainQR.style.display = hasGif ? 'none' : 'block';
+                const isBioSlide = slideData && slideData.isBioSlide;
+                // Hide QR for slides with GIF (they have side-by-side QR) or bio slides
+                mainQR.style.display = (hasGif || isBioSlide) ? 'none' : 'block';
             }
         }
 
