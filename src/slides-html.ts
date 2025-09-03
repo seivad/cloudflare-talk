@@ -1463,8 +1463,9 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             // Hide the poll slide
             const pollSlide = document.querySelector('.poll-slide');
             if (pollSlide) {
-                pollSlide.style.display = 'none';
                 pollSlide.classList.remove('active');
+                // Clear inline display style to let CSS control visibility
+                pollSlide.style.display = '';
                 console.log('Poll slide hidden');
             }
             
@@ -1528,6 +1529,9 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                 pollSlide = document.createElement('div');
                 pollSlide.className = 'poll-slide';
                 document.querySelector('.slide-content-area').appendChild(pollSlide);
+            } else {
+                // Clear any inline display style that might override the CSS
+                pollSlide.style.display = '';
             }
             
             pollSlide.innerHTML = \`
@@ -1701,6 +1705,8 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                 const pollSlide = document.querySelector('.poll-slide');
                 if (pollSlide) {
                     pollSlide.classList.remove('active');
+                    // Clear inline display style to let CSS control visibility
+                    pollSlide.style.display = '';
                 }
                 document.getElementById('slideContent').style.display = 'flex';
                 
