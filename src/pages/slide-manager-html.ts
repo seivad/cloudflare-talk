@@ -1245,20 +1245,18 @@ export const SLIDE_MANAGER_HTML = `<!DOCTYPE html>
                 }
                 
                 if (!response.ok) {
-                    const error = await response.json();
+                    let error;
+                    try {
+                        error = await response.json();
+                    } catch (e) {
+                        error = { error: 'Failed to delete' };
+                    }
                     throw new Error(error.error || 'Failed to delete');
                 }
                 
-                // Deletion successful - now reload slides
-                try {
-                    await loadSlides();
-                } catch (loadError) {
-                    // Deletion worked but loading slides failed - still a success
-                    console.error('Failed to reload slides after deletion:', loadError);
-                    // Remove the slide from local array as a fallback
-                    slides = slides.filter(s => s.id !== slideId);
-                    displaySlides();
-                }
+                // Deletion successful - reload slides
+                await loadSlides();
+                
             } catch (error) {
                 console.error('Failed to delete slide:', error);
                 alert('Failed to delete slide: ' + error.message);

@@ -305,17 +305,22 @@ export async function deleteSlide(
       return false;
     }
     
-    // Delete the slide
-    const deleteResult = await db.prepare('DELETE FROM slides WHERE id = ?').bind(slideId).run();
-    console.log(`Delete result:`, deleteResult.meta);
+    // First, temporarily set the slide's order_number to a very high value to avoid conflicts
+    await db.prepare(
+      'UPDATE slides SET order_number = 999999 WHERE id = ?'
+    ).bind(slideId).run();
     
-    // Reorder remaining slides
+    // Then reorder remaining slides
     const reorderResult = await db.prepare(
       `UPDATE slides 
        SET order_number = order_number - 1 
        WHERE presentation_id = ? AND order_number > ?`
     ).bind(slide.presentation_id, slide.order_number).run();
     console.log(`Reordered ${reorderResult.meta.changes} slides`);
+    
+    // Finally, delete the slide
+    const deleteResult = await db.prepare('DELETE FROM slides WHERE id = ?').bind(slideId).run();
+    console.log(`Delete result:`, deleteResult.meta);
     
     return true;
   } catch (error) {
