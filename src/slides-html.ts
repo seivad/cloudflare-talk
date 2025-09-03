@@ -118,7 +118,6 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         }
         
         .slide-qr-container .qr-code {
-            width: 100%;
             aspect-ratio: 1;
             background: white;
             border-radius: 12px;
