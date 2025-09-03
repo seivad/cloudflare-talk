@@ -54,7 +54,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         }
 
         .slide-content {
-            width: 1700px;
+            width: 1720px;
             height: 850px;
             color: #333;
             display: flex;
