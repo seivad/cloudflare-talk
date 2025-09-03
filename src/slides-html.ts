@@ -79,31 +79,58 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         
         .slide.with-gif.active {
             display: flex !important;
-            gap: 3rem;
+            gap: 4rem;
+            align-items: stretch;
         }
         
         .slide-content-wrapper {
-            flex: 0 0 70%;
+            flex: 0 0 50%;
             display: flex;
             flex-direction: column;
         }
         
-        .slide-gif-wrapper {
-            flex: 0 0 30%;
+        .slide-media-wrapper {
+            flex: 0 0 50%;
             display: flex;
+            gap: 2rem;
             align-items: flex-start;
             justify-content: center;
-            padding: 0 2rem;
         }
         
         .slide-gif-container {
-            width: min(100%, 400px);
+            flex: 1;
+            max-width: 350px;
             aspect-ratio: 1;
             border-radius: 6%;
             overflow: hidden;
             position: relative;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             background: #f0f0f0;
+        }
+        
+        .slide-qr-container {
+            flex: 1;
+            max-width: 280px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .slide-qr-container .qr-code {
+            width: 100%;
+            aspect-ratio: 1;
+            background: white;
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .slide-qr-container .qr-label {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #333;
+            text-align: center;
         }
         
         .bio-heading {
@@ -134,6 +161,11 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
             z-index: 9999;
             text-align: center;
             transition: all 0.3s ease;
+        }
+        
+        /* Hide absolute QR for slides with GIF (they use side-by-side layout) */
+        .slide.with-gif ~ .qr-container {
+            display: none !important;
         }
         
         /* For initial slides - centered and larger */
@@ -998,16 +1030,19 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                 }
             });
             
-            // Hide main QR container for initial slides (first slide) as they have their own QR
+            // Hide main QR container for slides with GIFs (they have their own QR) and initial slides
             const mainQR = document.getElementById('mainQRContainer');
             if (mainQR) {
-                // Hide for first slide (initial) that isn't a bio slide
                 const isInitialSlide = currentSlideIndex === 0;
                 const currentSlideData = slideData[currentSlideIndex];
-                const isBioSlide = currentSlideData && currentSlideData.isBioSlide;
+                const hasGif = currentSlideData && currentSlideData.gif;
                 
-                // Always show QR code on first slide
-                mainQR.style.display = 'block';
+                // Hide QR for slides with GIF (they have side-by-side QR) or initial slides with their own QR
+                if (hasGif || (isInitialSlide && !currentSlideData?.isBioSlide)) {
+                    mainQR.style.display = 'none';
+                } else {
+                    mainQR.style.display = 'block';
+                }
             }
         }
         
@@ -1144,10 +1179,11 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                         contentWrapper.appendChild(ul);
                     }
                     
-                    // Create GIF wrapper
-                    const gifWrapper = document.createElement('div');
-                    gifWrapper.className = 'slide-gif-wrapper';
+                    // Create media wrapper for both GIF and QR
+                    const mediaWrapper = document.createElement('div');
+                    mediaWrapper.className = 'slide-media-wrapper';
                     
+                    // Create GIF container
                     const gifContainer = document.createElement('div');
                     gifContainer.className = 'slide-gif-container';
                     
@@ -1157,10 +1193,32 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                     gif.className = 'slide-gif';
                     
                     gifContainer.appendChild(gif);
-                    gifWrapper.appendChild(gifContainer);
+                    
+                    // Create QR container
+                    const qrContainer = document.createElement('div');
+                    qrContainer.className = 'slide-qr-container';
+                    
+                    const qrImg = document.createElement('img');
+                    qrImg.className = 'qr-code';
+                    qrImg.alt = 'Join QR';
+                    
+                    // Generate QR code for the room URL
+                    const audienceUrl = \`\${window.location.origin}/audience/\${roomId}\`;
+                    qrImg.src = \`/qr/\${encodeURIComponent(audienceUrl)}?size=400\`;
+                    
+                    const qrLabel = document.createElement('div');
+                    qrLabel.className = 'qr-label';
+                    qrLabel.textContent = 'Scan to Join';
+                    
+                    qrContainer.appendChild(qrImg);
+                    qrContainer.appendChild(qrLabel);
+                    
+                    // Add both to media wrapper
+                    mediaWrapper.appendChild(gifContainer);
+                    mediaWrapper.appendChild(qrContainer);
                     
                     slideDiv.appendChild(contentWrapper);
-                    slideDiv.appendChild(gifWrapper);
+                    slideDiv.appendChild(mediaWrapper);
                 } else {
                     // No GIF, render normally
                     slideDiv.classList.remove('with-gif');
@@ -1201,6 +1259,14 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                         slideDiv.appendChild(ul);
                     }
                 }
+            }
+            
+            // Update main QR visibility based on whether slide has GIF
+            const mainQR = document.getElementById('mainQRContainer');
+            if (mainQR) {
+                const hasGif = slideData && slideData.gif;
+                // Hide QR for slides with GIF (they have side-by-side QR)
+                mainQR.style.display = hasGif ? 'none' : 'block';
             }
         }
 
