@@ -239,7 +239,7 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
         }
 
         .slide h2 {
-            font-size: 3.2rem;
+            font-size: 3.5rem;
             color: #c75300;
             margin-bottom: 1.5rem;
             font-weight: 700;
