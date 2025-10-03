@@ -500,6 +500,48 @@ export const SLIDE_MANAGER_HTML = `<!DOCTYPE html>
                     <label>Description</label>
                     <textarea class="form-control" id="presentationDescription" rows="3"></textarea>
                 </div>
+                <div class="form-group">
+                    <label>PIN Code *</label>
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="presentationPin"
+                        placeholder="Enter a PIN"
+                        style="font-family: monospace; letter-spacing: 0.1em; font-size: 1.2rem;"
+                    />
+                    <small style="color: #6b7280; font-size: 0.85rem;">Required - Cannot be empty</small>
+                </div>
+
+                <div class="form-group" id="collaboratorsSection" style="display: none; margin-top: 2rem; padding-top: 1.5rem; border-top: 2px solid #e5e7eb;">
+                    <label style="font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; display: block;">
+                        <i class="fas fa-users"></i> Collaborators
+                    </label>
+
+                    <!-- Current Collaborators List -->
+                    <div id="collaboratorsList" style="margin-bottom: 1rem;">
+                        <!-- Collaborators will be dynamically added here -->
+                    </div>
+
+                    <!-- Add Collaborator Form -->
+                    <div style="background: #f9fafb; padding: 1rem; border-radius: 8px; border: 1px solid #e5e7eb;">
+                        <label style="font-size: 0.9rem; color: #6b7280; margin-bottom: 0.5rem; display: block;">
+                            Add Collaborator by Email
+                        </label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input
+                                type="email"
+                                class="form-control"
+                                id="collaboratorEmail"
+                                placeholder="user@example.com"
+                                style="flex: 1;"
+                            />
+                            <button class="btn btn-primary" onclick="addCollaborator()" style="white-space: nowrap;">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        </div>
+                        <div id="collaboratorError" style="color: #dc2626; font-size: 0.85rem; margin-top: 0.5rem; display: none;"></div>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closePresentationModal()">Cancel</button>
@@ -815,37 +857,160 @@ export const SLIDE_MANAGER_HTML = `<!DOCTYPE html>
         }
         
         // Presentation editing
-        function editPresentation() {
+        async function editPresentation() {
             document.getElementById('presentationName').value = presentation.name || '';
             document.getElementById('presentationDescription').value = presentation.description || '';
+            document.getElementById('presentationPin').value = presentation.pin_code || '';
+
+            // Only show collaborators section if user is the owner
+            if (presentation.role === 'owner') {
+                document.getElementById('collaboratorsSection').style.display = 'block';
+                await loadCollaborators();
+            } else {
+                document.getElementById('collaboratorsSection').style.display = 'none';
+            }
+
             document.getElementById('editPresentationModal').classList.add('active');
         }
-        
+
         function closePresentationModal() {
             document.getElementById('editPresentationModal').classList.remove('active');
+            document.getElementById('collaboratorEmail').value = '';
+            document.getElementById('collaboratorError').style.display = 'none';
         }
-        
+
         async function savePresentationDetails() {
-            const name = document.getElementById('presentationName').value;
-            const description = document.getElementById('presentationDescription').value;
-            
+            const name = document.getElementById('presentationName').value.trim();
+            const description = document.getElementById('presentationDescription').value.trim();
+            const pin = document.getElementById('presentationPin').value.trim();
+
+            // Validate PIN - just make sure it's not empty
+            if (!pin) {
+                alert('PIN cannot be empty');
+                return;
+            }
+
             try {
                 const response = await fetch(\`/api/presentations/\${presentationId}\`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({ name, description })
+                    body: JSON.stringify({ name, description, pin_code: pin })
                 });
-                
+
                 if (!response.ok) throw new Error('Failed to save');
-                
+
                 presentation.name = name;
                 presentation.description = description;
+                presentation.pin_code = pin;
                 document.getElementById('presentationTitle').textContent = name;
+                updatePinDisplay();
                 closePresentationModal();
             } catch (error) {
                 console.error('Failed to save presentation:', error);
                 alert('Failed to save presentation details');
+            }
+        }
+
+        // Collaborator management
+        async function loadCollaborators() {
+            try {
+                const response = await fetch(\`/api/presentations/\${presentationId}/collaborators\`, {
+                    credentials: 'include'
+                });
+
+                if (!response.ok) throw new Error('Failed to load collaborators');
+
+                const collaborators = await response.json();
+                displayCollaborators(collaborators);
+            } catch (error) {
+                console.error('Failed to load collaborators:', error);
+            }
+        }
+
+        function displayCollaborators(collaborators) {
+            const list = document.getElementById('collaboratorsList');
+
+            if (collaborators.length === 0) {
+                list.innerHTML = '<div style="color: #9ca3af; font-size: 0.9rem; font-style: italic;">No collaborators yet</div>';
+                return;
+            }
+
+            list.innerHTML = collaborators.map(collab => \`
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: white; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 0.5rem;">
+                    <div>
+                        <div style="font-weight: 600; color: #1f2937;">\${collab.name}</div>
+                        <div style="font-size: 0.85rem; color: #6b7280;">\${collab.email}</div>
+                    </div>
+                    <button
+                        onclick="removeCollaborator('\${collab.user_id}')"
+                        class="btn btn-danger"
+                        style="padding: 0.5rem 0.75rem; font-size: 0.85rem;"
+                        title="Remove collaborator"
+                    >
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            \`).join('');
+        }
+
+        async function addCollaborator() {
+            const email = document.getElementById('collaboratorEmail').value.trim();
+            const errorDiv = document.getElementById('collaboratorError');
+
+            if (!email) {
+                errorDiv.textContent = 'Please enter an email address';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            // Basic email validation - improved regex
+            const emailRegex = /^[a-zA-Z0-9.!#$%&'*+\/=?^_\`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+            if (!emailRegex.test(email)) {
+                console.log('Collaborator email validation failed for:', email);
+                errorDiv.textContent = 'Please enter a valid email address';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                const response = await fetch(\`/api/presentations/\${presentationId}/collaborators\`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ email })
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.error || 'Failed to add collaborator');
+                }
+
+                document.getElementById('collaboratorEmail').value = '';
+                errorDiv.style.display = 'none';
+                await loadCollaborators();
+            } catch (error) {
+                console.error('Failed to add collaborator:', error);
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        async function removeCollaborator(userId) {
+            if (!confirm('Remove this collaborator from the presentation?')) return;
+
+            try {
+                const response = await fetch(\`/api/presentations/\${presentationId}/collaborators/\${userId}\`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+
+                if (!response.ok) throw new Error('Failed to remove collaborator');
+
+                await loadCollaborators();
+            } catch (error) {
+                console.error('Failed to remove collaborator:', error);
+                alert('Failed to remove collaborator');
             }
         }
         

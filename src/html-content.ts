@@ -611,8 +611,17 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
             console.log('Participant registered:', participantInfo);
             
             // Start WebSocket connection after name collection
-            if (!websocket) {
-                websocket = connectWebSocket();
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                connectWebSocket();
+            } else if (ws && ws.readyState === WebSocket.OPEN) {
+                // If already connected, send join message now
+                const joinMessage = {
+                    type: 'join',
+                    roomId: roomId,
+                    participant: participantInfo
+                };
+                console.log('Sending join message after name entry:', participantInfo);
+                ws.send(JSON.stringify(joinMessage));
             }
         });
         
@@ -742,24 +751,31 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
                     participantInfo = { firstName: 'Anonymous', lastName: '' };
                 }
                 
-                // Send initial join message with participant info to get current state
-                waitingForState = true;
-                const joinMessage = {
-                    type: 'join',
-                    roomId: roomId,
-                    participant: participantInfo || { firstName: 'Anonymous', lastName: '' }
-                };
-                ws.send(JSON.stringify(joinMessage));
-                
-                // Set a timeout to check if we received state
+                // Add a small delay to ensure the WebSocket is fully ready
                 setTimeout(() => {
-                    if (waitingForState) {
-                        console.log('Did not receive state after join, requesting again...');
-                        if (ws && ws.readyState === WebSocket.OPEN) {
-                            ws.send(JSON.stringify(joinMessage));
-                        }
+                    // Send initial join message with participant info to get current state
+                    waitingForState = true;
+                    const joinMessage = {
+                        type: 'join',
+                        roomId: roomId,
+                        participant: participantInfo || { firstName: 'Anonymous', lastName: '' }
+                    };
+                    
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        console.log('Sending join message with participant:', participantInfo);
+                        ws.send(JSON.stringify(joinMessage));
+                        
+                        // Set a timeout to check if we received state
+                        setTimeout(() => {
+                            if (waitingForState) {
+                                console.log('Did not receive state after join, requesting again...');
+                                if (ws && ws.readyState === WebSocket.OPEN) {
+                                    ws.send(JSON.stringify(joinMessage));
+                                }
+                            }
+                        }, 3000);
                     }
-                }, 3000);
+                }, 200);
                 
                 // Setup heartbeat with pong monitoring
                 heartbeatInterval = setInterval(() => {
@@ -1036,9 +1052,9 @@ export const AUDIENCE_HTML = `<!DOCTYPE html>
         }
         
         // Connect on load only if already registered
-        let websocket = null;
+        // Note: connectWebSocket uses the global ws variable, not websocket
         if (participantInfo && participantInfo.firstName) {
-            websocket = connectWebSocket();
+            connectWebSocket();
         }
         
         // Add participant to the session

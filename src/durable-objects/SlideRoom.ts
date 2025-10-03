@@ -479,6 +479,7 @@ export class SlideRoom {
             // Store in SQL if available
             if (this.sql && typeof this.sql.exec === 'function') {
               try {
+                // Note: SQL columns are first_name and last_name (with underscore)
                 await this.sql.exec(
                   `INSERT OR REPLACE INTO participants (id, user_id, joined_at, last_seen, is_presenter, first_name, last_name) 
                    VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -505,16 +506,21 @@ export class SlideRoom {
             // Broadcast new participant joined to ALL clients (including presenters)
             // This ensures the presenter sees a greeting when someone joins or rejoins
             console.log('Broadcasting participantJoined for:', participant.firstName, participant.lastName);
-            this.broadcast({
-              type: 'participantJoined',
-              data: {
-                firstName: participant.firstName,
-                lastName: participant.lastName,
-                lastInitial: participant.lastName ? participant.lastName.charAt(0) : '',
-                timestamp: Date.now()
-              }
-            });
-            console.log('Broadcast sent to', this.clients.size, 'clients');
+            
+            // Add a small delay to ensure all clients are ready to receive the message
+            setTimeout(() => {
+              console.log('Sending participantJoined broadcast to', this.clients.size, 'connected clients');
+              this.broadcast({
+                type: 'participantJoined',
+                data: {
+                  firstName: participant.firstName,
+                  lastName: participant.lastName,
+                  lastInitial: participant.lastName ? participant.lastName.charAt(0) : '',
+                  timestamp: Date.now()
+                }
+              });
+              console.log('Broadcast complete');
+            }, 100);
           }
           
           const currentSlide = this.getSlideData(this.slideState.currentSlideIndex);

@@ -634,6 +634,8 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                 
                 case 'participantJoined':
                     if (data.data) {
+                        console.log('Received participantJoined:', data.data.firstName, data.data.lastName);
+                        
                         // Add to participants map
                         const participantId = data.data.timestamp + '_' + Math.random();
                         connectedParticipants.set(participantId, {
@@ -643,8 +645,13 @@ export const COMPLETE_SLIDES_HTML = `<!DOCTYPE html>
                             joinedAt: data.data.timestamp
                         });
                         
-                        // Show greeting
-                        showWelcomeGreeting(data.data);
+                        // Ensure we can show greetings (check if function exists and DOM is ready)
+                        if (typeof showWelcomeGreeting === 'function' && document.body) {
+                            console.log('Showing welcome greeting for:', data.data.firstName);
+                            showWelcomeGreeting(data.data);
+                        } else {
+                            console.warn('Cannot show greeting - presenter view not ready');
+                        }
                     }
                     break;
                     

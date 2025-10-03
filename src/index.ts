@@ -12,7 +12,6 @@ import { SLIDES_HTML, AUDIENCE_HTML } from './html-content'
 import { WELCOME_HTML } from './welcome-html'
 import { PRESENTER_HTML } from './presenter-html'
 import { AUDIENCE_ENTRY_HTML } from './audience-entry-html'
-import { ADMIN_HTML } from './admin-html'
 import { LOGIN_HTML } from './pages/login-html'
 import { SETUP_HTML } from './pages/setup-html'
 import { TESTING_HTML } from './testing-html'
@@ -184,6 +183,36 @@ app.post('/api/auth/logout', (c) => {
 	return c.json({ success: true })
 })
 
+// Create new user (protected - for existing users to create new users)
+app.post('/api/users', requireAuth, async (c) => {
+	try {
+		const payload = c.get('jwtPayload')
+		const body = await c.req.json()
+
+		const result = await db.createUserByAdmin(c.env.DB, body)
+
+		if (!result.success) {
+			return c.json({ error: result.error }, 400)
+		}
+
+		return c.json({ success: true, userId: result.userId })
+	} catch (error) {
+		console.error('User creation error:', error)
+		return c.json({ error: 'Failed to create user' }, 500)
+	}
+})
+
+// Get all users (protected - for autocomplete)
+app.get('/api/users', requireAuth, async (c) => {
+	try {
+		const users = await db.getAllUsers(c.env.DB)
+		return c.json(users)
+	} catch (error) {
+		console.error('Failed to fetch users:', error)
+		return c.json({ error: 'Failed to fetch users' }, 500)
+	}
+})
+
 // ====== PROTECTED ROUTES MIDDLEWARE ======
 
 // Helper function to verify JWT manually for better error handling
@@ -233,11 +262,6 @@ app.get('/presenter/:presentationId/slides', requireAuth, async (c) => {
 app.get('/presenter/:presentationId/edit', requireAuth, async (c) => {
 	const presentationId = c.req.param('presentationId')
 	return c.redirect(`/presenter/${presentationId}/slides`)
-})
-
-// Admin dashboard (protected)
-app.get('/admin', requireAuth, async (c) => {
-	return c.html(ADMIN_HTML)
 })
 
 // Testing tools page (protected)
@@ -602,24 +626,37 @@ app.get('/api/poll-options', async (c) => {
 	return c.json(data as any)
 })
 
-// API: Get slides for a presentation (protected)
+// API: Get slides for a presentation (protected - allows collaborators)
 app.get('/api/presentations/:presentationId/slides', requireAuth, async (c) => {
 	try {
 		const payload = c.get('jwtPayload')
 		const presentationId = c.req.param('presentationId')
-		const slides = await db.getSlidesForPresentation(c.env.DB, presentationId, payload.sub)
-		return c.json(slides)
+
+		// Check if user has access (owner or collaborator)
+		const presentation = await db.getPresentationWithAccess(c.env.DB, presentationId, payload.sub)
+		if (!presentation) {
+			return c.json({ error: 'Presentation not found or unauthorized' }, 404)
+		}
+
+		// Get slides directly without ownership check since we already verified access
+		const result = await c.env.DB.prepare(
+			`SELECT * FROM slides
+			 WHERE presentation_id = ?
+			 ORDER BY order_number ASC`
+		).bind(presentationId).all()
+
+		return c.json(result.results || [])
 	} catch (error) {
 		console.error('Failed to fetch slides:', error)
 		return c.json({ error: 'Failed to fetch slides' }, 500)
 	}
 })
 
-// API: Get user's presentations (protected)
+// API: Get user's presentations (protected - includes collaborations)
 app.get('/api/presentations', requireAuth, async (c) => {
 	try {
 		const payload = c.get('jwtPayload')
-		const presentations = await db.getUserPresentations(c.env.DB, payload.sub)
+		const presentations = await db.getUserPresentationsWithCollaborations(c.env.DB, payload.sub)
 		return c.json(presentations)
 	} catch (error) {
 		console.error('Failed to fetch presentations:', error)
@@ -657,14 +694,14 @@ app.post('/api/session/:sessionCode/add-participant', async (c) => {
 	}
 })
 
-// API: Start a new presentation session (protected + PIN required)
+// API: Start a new presentation session (protected + PIN required - allows collaborators)
 app.post('/api/presenter/start-session', requireAuth, async (c) => {
 	try {
 		const payload = c.get('jwtPayload')
 		const body = await c.req.json<{ presentationId: string; pin?: string }>()
 
-		// Get presentation and verify ownership + PIN
-		const presentation = await db.getPresentationWithOwnerCheck(c.env.DB, body.presentationId, payload.sub)
+		// Get presentation and verify access (owner or collaborator)
+		const presentation = await db.getPresentationWithAccess(c.env.DB, body.presentationId, payload.sub)
 
 		if (!presentation) {
 			return c.json({ error: 'Presentation not found or unauthorized' }, 404)
@@ -714,6 +751,25 @@ app.post('/api/presenter/start-session', requireAuth, async (c) => {
 
 // ====== PRESENTATION MANAGEMENT ENDPOINTS (Protected) ======
 
+// Create new presentation
+app.post('/api/presentations', requireAuth, async (c) => {
+	try {
+		const payload = c.get('jwtPayload')
+		const body = await c.req.json()
+
+		const result = await db.createPresentation(c.env.DB, payload.sub, body)
+
+		if (!result.success) {
+			return c.json({ error: result.error }, 400)
+		}
+
+		return c.json({ success: true, presentationId: result.presentationId })
+	} catch (error) {
+		console.error('Failed to create presentation:', error)
+		return c.json({ error: 'Failed to create presentation' }, 500)
+	}
+})
+
 // Update presentation details (title, description, PIN)
 app.put('/api/presentations/:id', requireAuth, async (c) => {
 	try {
@@ -751,6 +807,80 @@ app.post('/api/presentations/:id/generate-pin', requireAuth, async (c) => {
 	} catch (error) {
 		console.error('Failed to generate PIN:', error)
 		return c.json({ error: 'Failed to generate PIN' }, 500)
+	}
+})
+
+// ====== COLLABORATOR MANAGEMENT ENDPOINTS (Protected) ======
+
+// Get collaborators for a presentation
+app.get('/api/presentations/:id/collaborators', requireAuth, async (c) => {
+	try {
+		const payload = c.get('jwtPayload')
+		const presentationId = c.req.param('id')
+
+		// Verify user has access to this presentation
+		const presentation = await db.getPresentationWithAccess(c.env.DB, presentationId, payload.sub)
+		if (!presentation) {
+			return c.json({ error: 'Presentation not found or unauthorized' }, 404)
+		}
+
+		const collaborators = await db.getCollaborators(c.env.DB, presentationId)
+		return c.json(collaborators)
+	} catch (error) {
+		console.error('Failed to fetch collaborators:', error)
+		return c.json({ error: 'Failed to fetch collaborators' }, 500)
+	}
+})
+
+// Add collaborator to presentation (owner only)
+app.post('/api/presentations/:id/collaborators', requireAuth, async (c) => {
+	try {
+		const payload = c.get('jwtPayload')
+		const presentationId = c.req.param('id')
+		const { email } = await c.req.json()
+
+		// Verify user is the owner (only owners can add collaborators)
+		const presentation = await db.getPresentationWithOwnerCheck(c.env.DB, presentationId, payload.sub)
+		if (!presentation) {
+			return c.json({ error: 'Only the presentation owner can add collaborators' }, 403)
+		}
+
+		const result = await db.addCollaborator(c.env.DB, presentationId, email, payload.sub)
+
+		if (!result.success) {
+			return c.json({ error: result.error }, 400)
+		}
+
+		return c.json({ success: true, collaboratorId: result.collaboratorId })
+	} catch (error) {
+		console.error('Failed to add collaborator:', error)
+		return c.json({ error: 'Failed to add collaborator' }, 500)
+	}
+})
+
+// Remove collaborator from presentation (owner only)
+app.delete('/api/presentations/:id/collaborators/:userId', requireAuth, async (c) => {
+	try {
+		const payload = c.get('jwtPayload')
+		const presentationId = c.req.param('id')
+		const userId = c.req.param('userId')
+
+		// Verify user is the owner
+		const presentation = await db.getPresentationWithOwnerCheck(c.env.DB, presentationId, payload.sub)
+		if (!presentation) {
+			return c.json({ error: 'Only the presentation owner can remove collaborators' }, 403)
+		}
+
+		const success = await db.removeCollaborator(c.env.DB, presentationId, userId, payload.sub)
+
+		if (!success) {
+			return c.json({ error: 'Failed to remove collaborator' }, 404)
+		}
+
+		return c.json({ success: true })
+	} catch (error) {
+		console.error('Failed to remove collaborator:', error)
+		return c.json({ error: 'Failed to remove collaborator' }, 500)
 	}
 })
 

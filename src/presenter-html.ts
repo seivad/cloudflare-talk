@@ -343,10 +343,16 @@ export const PRESENTER_HTML = `<!DOCTYPE html>
         <div class="header">
             <h1>🚀 Presenter Dashboard</h1>
             <p>Start a new presentation session</p>
-            <div style="margin-top: 1rem;">
+            <div style="margin-top: 1rem; display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                <button onclick="openCreatePresentationModal()" style="padding: 0.75rem 1.5rem; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.3s;">
+                    ➕ Create New Presentation
+                </button>
                 <a href="/testing" style="display: inline-block; padding: 0.5rem 1rem; background: rgba(255, 255, 255, 0.2); color: white; text-decoration: none; border-radius: 8px; font-size: 0.9rem; transition: background 0.3s;">
                     🧪 Testing Tools
                 </a>
+                <button onclick="openCreateUserModal()" style="padding: 0.5rem 1rem; background: rgba(255, 255, 255, 0.2); color: white; border: none; border-radius: 8px; font-size: 0.9rem; cursor: pointer; transition: background 0.3s;">
+                    👥 Create New User
+                </button>
             </div>
         </div>
         
@@ -398,7 +404,62 @@ export const PRESENTER_HTML = `<!DOCTYPE html>
             </div>
         </div>
     </div>
-    
+
+    <!-- Create Presentation Modal -->
+    <div class="pin-modal" id="createPresentationModal">
+        <div class="pin-modal-content" style="max-width: 500px;">
+            <h3>➕ Create New Presentation</h3>
+            <p>Create a new presentation to share with your audience</p>
+
+            <div class="pin-error" id="createPresentationError" style="display: none;"></div>
+
+            <div style="text-align: left; margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; color: #333; font-weight: 500; font-size: 0.9rem;">Presentation Name *</label>
+                <input type="text" id="newPresentationName" placeholder="My Awesome Presentation" style="width: 100%; padding: 0.75rem; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 1rem; margin-bottom: 1rem;" />
+
+                <label style="display: block; margin-bottom: 0.5rem; color: #333; font-weight: 500; font-size: 0.9rem;">Description (optional)</label>
+                <textarea id="newPresentationDescription" placeholder="A brief description of your presentation..." style="width: 100%; padding: 0.75rem; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 1rem; min-height: 100px; resize: vertical; font-family: inherit;"></textarea>
+            </div>
+
+            <div class="pin-modal-buttons">
+                <button class="pin-modal-btn secondary" onclick="closeCreatePresentationModal()">Cancel</button>
+                <button class="pin-modal-btn primary" onclick="submitCreatePresentation()">Create Presentation</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create User Modal -->
+    <div class="pin-modal" id="createUserModal">
+        <div class="pin-modal-content" style="max-width: 500px;">
+            <h3>👥 Create New User</h3>
+            <p>Create a new user account for a collaborator</p>
+
+            <div class="pin-error" id="createUserError" style="display: none;"></div>
+            <div style="color: #22c55e; font-size: 0.9rem; margin-bottom: 1rem; display: none; background: #dcfce7; padding: 0.75rem; border-radius: 6px;" id="createUserSuccess">
+                User created successfully!
+            </div>
+
+            <div style="text-align: left; margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; color: #333; font-weight: 500; font-size: 0.9rem;">Name</label>
+                <input type="text" id="newUserName" placeholder="John Doe" style="width: 100%; padding: 0.75rem; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 1rem; margin-bottom: 1rem;" />
+
+                <label style="display: block; margin-bottom: 0.5rem; color: #333; font-weight: 500; font-size: 0.9rem;">Email</label>
+                <input type="email" id="newUserEmail" placeholder="john@example.com" style="width: 100%; padding: 0.75rem; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 1rem; margin-bottom: 1rem;" />
+
+                <label style="display: block; margin-bottom: 0.5rem; color: #333; font-weight: 500; font-size: 0.9rem;">Password</label>
+                <input type="password" id="newUserPassword" placeholder="Min. 8 characters" style="width: 100%; padding: 0.75rem; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 1rem; margin-bottom: 1rem;" />
+
+                <label style="display: block; margin-bottom: 0.5rem; color: #333; font-weight: 500; font-size: 0.9rem;">Confirm Password</label>
+                <input type="password" id="newUserPasswordConfirm" placeholder="Re-enter password" style="width: 100%; padding: 0.75rem; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 1rem;" />
+            </div>
+
+            <div class="pin-modal-buttons">
+                <button class="pin-modal-btn secondary" onclick="closeCreateUserModal()">Cancel</button>
+                <button class="pin-modal-btn primary" onclick="submitCreateUser()">Create User</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let presentations = [];
         let currentSession = null;
@@ -457,7 +518,10 @@ export const PRESENTER_HTML = `<!DOCTYPE html>
             
             container.innerHTML = presentations.map(pres => \`
                 <div class="presentation-card">
-                    <h3 class="presentation-title">\${escapeHtml(pres.name)}</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                        <h3 class="presentation-title" style="margin: 0;">\${escapeHtml(pres.name)}</h3>
+                        \${pres.role === 'collaborator' ? '<span style="background: #3b82f6; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">👥 Collaborator</span>' : ''}
+                    </div>
                     <p class="presentation-desc">\${escapeHtml(pres.description || 'No description available')}</p>
                     <div class="presentation-meta">
                         <span class="slide-count">\${pres.slide_count || 0} slides</span>
@@ -642,7 +706,158 @@ export const PRESENTER_HTML = `<!DOCTYPE html>
                 e.target.classList.remove('active');
             }
         });
-        
+
+        // Create Presentation Modal Functions
+        function openCreatePresentationModal() {
+            // Clear form
+            document.getElementById('newPresentationName').value = '';
+            document.getElementById('newPresentationDescription').value = '';
+            document.getElementById('createPresentationError').style.display = 'none';
+
+            // Show modal
+            document.getElementById('createPresentationModal').classList.add('active');
+        }
+
+        function closeCreatePresentationModal() {
+            document.getElementById('createPresentationModal').classList.remove('active');
+        }
+
+        async function submitCreatePresentation() {
+            const name = document.getElementById('newPresentationName').value.trim();
+            const description = document.getElementById('newPresentationDescription').value.trim();
+
+            const errorDiv = document.getElementById('createPresentationError');
+
+            // Hide previous messages
+            errorDiv.style.display = 'none';
+
+            // Validation
+            if (!name) {
+                errorDiv.textContent = 'Presentation name is required';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/presentations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ name, description: description || undefined })
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.error || 'Failed to create presentation');
+                }
+
+                const data = await response.json();
+
+                // Close modal
+                closeCreatePresentationModal();
+
+                // Redirect to the slide manager for the new presentation
+                window.location.href = \`/presenter/\${data.presentationId}/slides\`;
+            } catch (error) {
+                console.error('Failed to create presentation:', error);
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        // Create User Modal Functions
+        function openCreateUserModal() {
+            // Clear form
+            document.getElementById('newUserName').value = '';
+            document.getElementById('newUserEmail').value = '';
+            document.getElementById('newUserPassword').value = '';
+            document.getElementById('newUserPasswordConfirm').value = '';
+            document.getElementById('createUserError').style.display = 'none';
+            document.getElementById('createUserSuccess').style.display = 'none';
+
+            // Show modal
+            document.getElementById('createUserModal').classList.add('active');
+        }
+
+        function closeCreateUserModal() {
+            document.getElementById('createUserModal').classList.remove('active');
+        }
+
+        async function submitCreateUser() {
+            const name = document.getElementById('newUserName').value.trim();
+            const email = document.getElementById('newUserEmail').value.trim();
+            const password = document.getElementById('newUserPassword').value;
+            const passwordConfirmation = document.getElementById('newUserPasswordConfirm').value;
+
+            const errorDiv = document.getElementById('createUserError');
+            const successDiv = document.getElementById('createUserSuccess');
+
+            // Hide previous messages
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+
+            // Client-side validation
+            if (!name || !email || !password || !passwordConfirmation) {
+                errorDiv.textContent = 'All fields are required';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            if (password !== passwordConfirmation) {
+                errorDiv.textContent = 'Passwords do not match';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            if (password.length < 8) {
+                errorDiv.textContent = 'Password must be at least 8 characters';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            // Basic email validation - improved regex
+            const emailRegex = /^[a-zA-Z0-9.!#$%&'*+\/=?^_\`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+            if (!emailRegex.test(email)) {
+                console.log('Email validation failed for:', email);
+                errorDiv.textContent = 'Please enter a valid email address';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ name, email, password, passwordConfirmation })
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.error || 'Failed to create user');
+                }
+
+                // Success
+                successDiv.style.display = 'block';
+                errorDiv.style.display = 'none';
+
+                // Clear form
+                document.getElementById('newUserName').value = '';
+                document.getElementById('newUserEmail').value = '';
+                document.getElementById('newUserPassword').value = '';
+                document.getElementById('newUserPasswordConfirm').value = '';
+
+                // Close modal after 2 seconds
+                setTimeout(() => {
+                    closeCreateUserModal();
+                }, 2000);
+            } catch (error) {
+                console.error('Failed to create user:', error);
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+            }
+        }
+
         // Load presentations on page load
         loadPresentations();
     </script>
